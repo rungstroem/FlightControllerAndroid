@@ -23,7 +23,6 @@ import android.widget.TextView;
 
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
-import java.util.Objects;
 import java.util.concurrent.locks.ReentrantLock;
 
 
@@ -37,6 +36,7 @@ public class SensorTestActivity extends Activity {
     boolean GPSUpdate = false;
     boolean stopFilterThread = false;
     public ReentrantLock mutex = new ReentrantLock();
+    LinearAlgebra LA;
 
     TextView accView;
     TextView gyroView;
@@ -72,6 +72,9 @@ public class SensorTestActivity extends Activity {
         //Register GPS update receiver
         LocalBroadcastManager.getInstance(this).registerReceiver(GPSReceiver, new IntentFilter("GPSLocationUpdates"));
 
+        //Initialize linear algebra library
+        LA = new LinearAlgebra();
+
         //Initialize Kalman filtering in filterThread
         startKalman();
     }
@@ -95,68 +98,6 @@ public class SensorTestActivity extends Activity {
         mSensorManger.unregisterListener(gyroListener);
         sensorHandlerThread.quit();
         stopService(new Intent(SensorTestActivity.this, GPSService.class));
-    }
-
-    double[][] matrixAdd(double[][] J, double[][] Q) {
-        double[][] matReturn = new double[12][12];
-        for (int i = 0; i < 12; i++) {
-            for (int j = 0; j < 12; j++) {
-                matReturn[i][j] = J[i][j] + Q[i][j];
-            }
-        }
-        return matReturn;
-    }
-
-    double[][] matrixTranspose(double[][] J) {
-        double[][] matReturn = new double[12][12];
-        for (int i = 0; i < 12; i++) {
-            for (int j = 0; j < 12; j++) {
-                matReturn[i][j] = J[j][i];
-            }
-        }
-        return matReturn;
-    }
-
-    double[][] matrixMultiply(double[][] J, double[][] P) {
-        double[][] matReturn = new double[12][12];
-        for (int i = 0; i < 12; i++) {
-            for (int j = 0; j < 12; j++) {
-                double temp = 0.0;
-                for (int k = 0; k < 12; k++) {
-                    temp = J[i][k] * P[k][i];
-                }
-                matReturn[i][j] = temp;
-            }
-        }
-        return matReturn;
-    }
-
-    double[][] matrixSub(double[][] mat1, double[][] mat2){
-        double[][] retMat = new double[12][12];
-        for(int i = 0; i<12; i++){
-            for(int j = 0; j<12; j++){
-                retMat[i][j] = mat1[i][j] - mat2[i][j];
-            }
-        }
-        return retMat;
-    }
-
-    double[] vectMatMul(double[][] mat, double[] vect){
-        double[] vectRet = new double[12];
-        for(int i=0; i<12; i++){
-            for(int j=0; j<12; j++){
-                vectRet[i] += mat[i][j]*vect[j];
-            }
-        }
-        return vectRet;
-    }
-
-    double[] vectAdd(double[] V1, double[] V2, int s){
-        double[] vectRet = new double[12];
-        for(int i=0; i<12; i++){
-            vectRet[i] = V1[i]+(V2[i]*s);
-        }
-        return vectRet;
     }
 
     //inputVect = [ax, ay, az, wx, wy, wz]
@@ -219,69 +160,6 @@ public class SensorTestActivity extends Activity {
         return J;
     }
 
-    //https://www.sanfoundry.com/java-program-find-inverse-matrix/
-    double[][] matrixInverse(double[][] mat){
-        double[][] x = new double[12][12];
-        double[][] b = new double[12][12];
-        int[] index = new int[12];
-        gaussianPivot(mat,index);
-
-        for(int i=0; i<12; i++){
-            for(int j=i+1; j<12; ++j){
-                for(int k=0; k<12; ++k){
-                    b[index[j]][k] -= mat[index[j]][i]*b[index[i]][k];
-                }
-            }
-        }
-        for(int i=0; i<12; ++i){
-            x[12-1][i] = b[index[12-1]][i]/mat[index[12-1]][12-1];
-            for(int j=12-2; j>=0; --j){
-                x[j][i] = b[index[j]][i];
-                for(int k=j+1; k<12; ++k){
-                    x[j][i] -= mat[index[j]][k]*x[k][i];
-                }
-                x[j][i] /= mat[index[j]][j];
-            }
-        }
-        return x;
-    }
-
-    void gaussianPivot(double[][] a, int[] index){
-        double[] c = new double[12];
-        for(int i=0; i<12;i++){
-            index[i] = i;
-            double c1 = 0;
-            for(int j=0; j<12; j++){
-                double c0 = Math.abs(a[i][j]);
-                if(c0 > c1){
-                    c1 = c0;
-                }
-            }
-            c[i] = c1;
-        }
-        int k = 0;
-        for(int j=0;j<12-1;j++){
-            double pi1 = 0;
-            for(int i=j;i<12; i++){
-                double pi0 = Math.abs(a[index[i]][j]);
-                pi0 /= c[index[i]];
-                if(pi0>pi1){
-                    pi1 = pi0;
-                    k = i;
-                }
-            }
-            int itmp = index[j];
-            index[j] = index[k];
-            index[k] = itmp;
-            for(int i=j+1; i<12; i++){
-                double pj = a[index[i]][j]/a[index[j]][j];
-                a[index[i]][j] = pj;
-                for(int l=j+1; l<12; ++l){
-                    a[index[i]][l] -= pj*a[index[j]][l];
-                }
-            }
-        }
-    }
     double[] xTemp = new double[3];
     void startKalman() {
         filterThread = new Thread(new Runnable() {
@@ -327,18 +205,18 @@ public class SensorTestActivity extends Activity {
                     //Predict
                     x = stateTransistionMatrix(x, u, 0.001);    //Calculate the priori estimate
                     J = jacobian(x, u, 0.001);  //Calculate the jacobian of F
-                    Jt = matrixTranspose(J);    //Take transpose of the jacobian
-                    P = matrixAdd(matrixMultiply(matrixMultiply(J,P),Jt),Q);    //Calculate priori covariance
+                    Jt = LA.matrixTranspose(J);//matrixTranspose(J);    //Take transpose of the jacobian
+                    P = LA.matrixAdd(LA.matrixMultiply(LA.matrixMultiply(J,P),Jt),Q);//matrixAdd(matrixMultiply(matrixMultiply(J,P),Jt),Q);    //Calculate priori covariance
 
                     //Update 1
                     y[0] = 0; y[1] = 0; y[2] = 0; y[3] = 0; y[4] = 0; y[5] = 0; y[6] = accR; y[7] = accP; y[8] = magY; y[9] = 0; y[10] = 0; y[11] = 0;
                     C[0][0] = 0; C[1][1] = 0; C[2][2] = 0; C[3][3] = 0; C[4][4] = 0; C[5][5] = 0; C[6][6] = 1; C[7][7] = 1; C[8][8] = 1; C[9][9] = 0; C[10][10] = 0; C[11][11] = 0;
                     //Intermediate steps for clarity
-                    Ct = matrixTranspose(C);    //Take inverse of C
-                    CPR = matrixInverse(matrixAdd(matrixMultiply(matrixMultiply(C,P),Ct),R));  //Intermediate step for simplicity
-                    K = matrixMultiply(matrixMultiply(P,Ct), CPR);   //calculate kalman gain
-                    x = vectAdd(x,vectMatMul(K,vectAdd(y,vectMatMul(C,x),-1)),1);   //calculate posterior estimate
-                    P = matrixMultiply(matrixSub(I,matrixMultiply(K,C)), P);    //Update posterior covariance
+                    Ct = LA.matrixTranspose(C);    //Take inverse of C
+                    CPR = LA.matrixInverse(LA.matrixAdd(LA.matrixMultiply(LA.matrixMultiply(C,P),Ct),R));  //Intermediate step for simplicity
+                    K = LA.matrixMultiply(LA.matrixMultiply(P,Ct), CPR);   //calculate kalman gain
+                    x = LA.vectAdd(x,LA.vectMatMultiply(K,LA.vectAdd(y,LA.vectMatMultiply(C,x),-1)),1);   //calculate posterior estimate
+                    P = LA.matrixMultiply(LA.matrixSubtract(I,LA.matrixMultiply(K,C)), P);    //Update posterior covariance
 
                     //P is often 0 and therefore K is often 0 - something is wrong here.
 
@@ -353,11 +231,11 @@ public class SensorTestActivity extends Activity {
                         }
                         y[0] = GPSx; y[1] = GPSy; y[2] = GPSz; y[3] = 0; y[4] = 0; y[5] = 0; y[6] = accR; y[7] = accP; y[8] = magY; y[9] = 0; y[10] = 0; y[11] = 0;
                         C[0][0] = 1; C[1][1] = 1; C[2][2] = 1; C[3][3] = 0; C[4][4] = 0; C[5][5] = 0; C[6][6] = 1; C[7][7] = 1; C[8][8] = 1; C[9][9] = 0; C[10][10] = 0; C[11][11] = 0;
-                        Ct = matrixTranspose(C);
-                        CPR = matrixInverse(matrixAdd(matrixMultiply(matrixMultiply(C,P),Ct),R));
-                        K = matrixMultiply(matrixMultiply(P,Ct),CPR);
-                        x = vectAdd(x,vectMatMul(K,vectAdd(y,vectMatMul(C,x),-1)),1);
-                        P = matrixMultiply(matrixSub(I,matrixMultiply(K,C)),P);
+                        Ct = LA.matrixTranspose(C);
+                        CPR = LA.matrixInverse(LA.matrixAdd(LA.matrixMultiply(LA.matrixMultiply(C,P),Ct),R));
+                        K = LA.matrixMultiply(LA.matrixMultiply(P,Ct),CPR);
+                        x = LA.vectAdd(x,LA.vectMatMultiply(K,LA.vectAdd(y,LA.vectMatMultiply(C,x),-1)),1);
+                        P = LA.matrixMultiply(LA.matrixSubtract(I,LA.matrixMultiply(K,C)),P);
 
                         xTemp[0] = x[0]; xTemp[1] = x[1]; xTemp[2] = x[2];
                         runOnUiThread(new Runnable() {
@@ -435,9 +313,9 @@ public class SensorTestActivity extends Activity {
     SensorEventListener gyroListener = new SensorEventListener() {
         @Override
         public void onSensorChanged(SensorEvent sensorEvent) {
-            wr = sensorEvent.values[0];
-            wp = sensorEvent.values[1];
-            wy = sensorEvent.values[2];
+            wr = sensorEvent.values[0]*rad2deg;
+            wp = sensorEvent.values[1]*rad2deg;
+            wy = sensorEvent.values[2]*rad2deg;
 
             /*Log.i("SensorUpdates","Gyroscope update");
             if(timestamp != 0){

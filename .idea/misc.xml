@@ -3,6 +3,8 @@
   <component name="DesignSurface">
     <option name="filePathToZoomLevelMap">
       <map>
+        <entry key="app/src/main/res/drawable/edittext_style.xml" value="0.22135416666666666" />
+        <entry key="app/src/main/res/layout/activity_autopilot.xml" value="0.2546875" />
         <entry key="app/src/main/res/layout/activity_control.xml" value="0.225" />
         <entry key="app/src/main/res/layout/activity_gpsactivity.xml" value="0.26510416666666664" />
         <entry key="app/src/main/res/layout/activity_guides.xml" value="0.19010416666666666" />

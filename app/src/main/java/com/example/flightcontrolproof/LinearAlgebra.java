@@ -13,9 +13,10 @@ public class LinearAlgebra {
     }
 
     double[][] matrixTranspose(double[][] J) {
-        double[][] matReturn = new double[12][12];
-        for (int i = 0; i < 12; i++) {
-            for (int j = 0; j < 12; j++) {
+        int n = J.length;
+        double[][] matReturn = new double[n][n];
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < n; j++) {
                 matReturn[i][j] = J[j][i];
             }
         }
@@ -23,11 +24,12 @@ public class LinearAlgebra {
     }
 
     double[][] matrixMultiply(double[][] J, double[][] P) {
-        double[][] matReturn = new double[12][12];
-        for (int i = 0; i < 12; i++) {
-            for (int j = 0; j < 12; j++) {
+        int n = J.length;
+        double[][] matReturn = new double[n][n];
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < n; j++) {
                 double temp = 0.0;
-                for (int k = 0; k < 12; k++) {
+                for (int k = 0; k < n; k++) {
                     temp = J[i][k] * P[k][i];
                 }
                 matReturn[i][j] = temp;
@@ -36,20 +38,22 @@ public class LinearAlgebra {
         return matReturn;
     }
 
-    double[][] matrixSub(double[][] mat1, double[][] mat2){
-        double[][] retMat = new double[12][12];
-        for(int i = 0; i<12; i++){
-            for(int j = 0; j<12; j++){
+    double[][] matrixSubtract(double[][] mat1, double[][] mat2){
+        int n = mat1.length;
+        double[][] retMat = new double[n][n];
+        for(int i = 0; i<n; i++){
+            for(int j = 0; j<n; j++){
                 retMat[i][j] = mat1[i][j] - mat2[i][j];
             }
         }
         return retMat;
     }
 
-    double[] vectMatMul(double[][] mat, double[] vect){
-        double[] vectRet = new double[12];
-        for(int i=0; i<12; i++){
-            for(int j=0; j<12; j++){
+    double[] vectMatMultiply(double[][] mat, double[] vect){
+        int n = mat.length;
+        double[] vectRet = new double[n];
+        for(int i=0; i<n; i++){
+            for(int j=0; j<n; j++){
                 vectRet[i] += mat[i][j]*vect[j];
             }
         }
@@ -57,10 +61,85 @@ public class LinearAlgebra {
     }
 
     double[] vectAdd(double[] V1, double[] V2, int s){
-        double[] vectRet = new double[12];
-        for(int i=0; i<12; i++){
+        int n = V1.length;
+        double[] vectRet = new double[n];
+        for(int i=0; i<n; i++){
             vectRet[i] = V1[i]+(V2[i]*s);
         }
         return vectRet;
+    }
+
+    double[] vectConstMultiply(double[] vect, double c){
+        int n = vect.length;
+        double[] v = new double[n];
+        for(int i=0; i<n; i++){
+            v[i] = vect[i]*c;
+        }
+        return v;
+    }
+
+
+    //https://www.sanfoundry.com/java-program-find-inverse-matrix/
+    double[][] matrixInverse(double[][] mat){
+        double[][] x = new double[12][12];
+        double[][] b = new double[12][12];
+        int[] index = new int[12];
+        gaussianPivot(mat,index);
+
+        for(int i=0; i<12; i++){
+            for(int j=i+1; j<12; ++j){
+                for(int k=0; k<12; ++k){
+                    b[index[j]][k] -= mat[index[j]][i]*b[index[i]][k];
+                }
+            }
+        }
+        for(int i=0; i<12; ++i){
+            x[12-1][i] = b[index[12-1]][i]/mat[index[12-1]][12-1];
+            for(int j=12-2; j>=0; --j){
+                x[j][i] = b[index[j]][i];
+                for(int k=j+1; k<12; ++k){
+                    x[j][i] -= mat[index[j]][k]*x[k][i];
+                }
+                x[j][i] /= mat[index[j]][j];
+            }
+        }
+        return x;
+    }
+
+    void gaussianPivot(double[][] a, int[] index){
+        double[] c = new double[12];
+        for(int i=0; i<12;i++){
+            index[i] = i;
+            double c1 = 0;
+            for(int j=0; j<12; j++){
+                double c0 = Math.abs(a[i][j]);
+                if(c0 > c1){
+                    c1 = c0;
+                }
+            }
+            c[i] = c1;
+        }
+        int k = 0;
+        for(int j=0;j<12-1;j++){
+            double pi1 = 0;
+            for(int i=j;i<12; i++){
+                double pi0 = Math.abs(a[index[i]][j]);
+                pi0 /= c[index[i]];
+                if(pi0>pi1){
+                    pi1 = pi0;
+                    k = i;
+                }
+            }
+            int itmp = index[j];
+            index[j] = index[k];
+            index[k] = itmp;
+            for(int i=j+1; i<12; i++){
+                double pj = a[index[i]][j]/a[index[j]][j];
+                a[index[i]][j] = pj;
+                for(int l=j+1; l<12; ++l){
+                    a[index[i]][l] -= pj*a[index[j]][l];
+                }
+            }
+        }
     }
 }

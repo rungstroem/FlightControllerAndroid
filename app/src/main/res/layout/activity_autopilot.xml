@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".Autopilot">
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center">
+
+    <!--    Pitch controller inputs     -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/PitchControllerGainsTextview"
+        android:text="Pitch controller gains" />
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <EditText
+            android:layout_width="75dp"
+            android:layout_height="wrap_content"
+            android:id="@+id/PitchKp"
+            android:background="@drawable/edittext_style"
+            android:padding="5dp"
+            android:inputType="numberSigned|numberDecimal"
+            android:hint="Kp"/>
+        <EditText
+            android:layout_width="75dp"
+            android:layout_height="wrap_content"
+            android:id="@+id/PitchKi"
+            android:background="@drawable/edittext_style"
+            android:padding="5dp"
+            android:layout_marginLeft="5dp"
+            android:inputType="numberSigned|numberDecimal"
+            android:hint="Ki"/>
+        <EditText
+            android:layout_width="75dp"
+            android:layout_height="wrap_content"
+            android:id="@+id/PitchKd"
+            android:background="@drawable/edittext_style"
+            android:padding="5dp"
+            android:layout_marginLeft="5dp"
+            android:inputType="numberSigned|numberDecimal"
+            android:hint="Ki"/>
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/PitchOKButton"
+            android:layout_marginLeft="20dp"
+            android:text="Enter"/>
+    </LinearLayout>
+
+    <!--    Height controller input     -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/HeightControllerGainsTextview"
+        android:text="Height controller gains" />
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <EditText
+            android:layout_width="75dp"
+            android:layout_height="wrap_content"
+            android:id="@+id/HeightKp"
+            android:background="@drawable/edittext_style"
+            android:padding="5dp"
+            android:inputType="numberSigned|numberDecimal"
+            android:hint="Kp"/>
+        <EditText
+            android:layout_width="75dp"
+            android:layout_height="wrap_content"
+            android:id="@+id/HeightKi"
+            android:background="@drawable/edittext_style"
+            android:padding="5dp"
+            android:layout_marginLeft="5dp"
+            android:inputType="numberSigned|numberDecimal"
+            android:hint="Ki"/>
+        <EditText
+            android:layout_width="75dp"
+            android:layout_height="wrap_content"
+            android:id="@+id/HeightKd"
+            android:background="@drawable/edittext_style"
+            android:padding="5dp"
+            android:layout_marginLeft="5dp"
+            android:inputType="numberSigned|numberDecimal"
+            android:hint="Ki"/>
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/HeightOKButton"
+            android:layout_marginLeft="20dp"
+            android:text="Enter"/>
+    </LinearLayout>
+
+    <!--    Throttle controller input   -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/ThrottleControllerGainsTextview"
+        android:text="Throttle controller gains" />
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <EditText
+            android:layout_width="75dp"
+            android:layout_height="wrap_content"
+            android:id="@+id/ThrottleKp"
+            android:background="@drawable/edittext_style"
+            android:padding="5dp"
+            android:inputType="numberSigned|numberDecimal"
+            android:hint="Kp"/>
+        <EditText
+            android:layout_width="75dp"
+            android:layout_height="wrap_content"
+            android:id="@+id/ThrottleKi"
+            android:background="@drawable/edittext_style"
+            android:padding="5dp"
+            android:layout_marginLeft="5dp"
+            android:inputType="numberSigned|numberDecimal"
+            android:hint="Ki"/>
+        <EditText
+            android:layout_width="75dp"
+            android:layout_height="wrap_content"
+            android:id="@+id/ThrottleKd"
+            android:background="@drawable/edittext_style"
+            android:padding="5dp"
+            android:layout_marginLeft="5dp"
+            android:inputType="numberSigned|numberDecimal"
+            android:hint="Ki"/>
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/ThrottleOKButton"
+            android:layout_marginLeft="20dp"
+            android:text="Enter"/>
+    </LinearLayout>
+
+</LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>
