@@ -55,6 +55,137 @@
             android:layout_marginLeft="20dp"
             android:text="Enter"/>
     </LinearLayout>
+    <!--    Roll controller inputs  -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/RollControllerGainsTextview"
+        android:text="Roll controller gains" />
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <EditText
+            android:layout_width="75dp"
+            android:layout_height="wrap_content"
+            android:id="@+id/RollKp"
+            android:background="@drawable/edittext_style"
+            android:padding="5dp"
+            android:inputType="numberSigned|numberDecimal"
+            android:hint="Kp"/>
+        <EditText
+            android:layout_width="75dp"
+            android:layout_height="wrap_content"
+            android:id="@+id/RollKi"
+            android:background="@drawable/edittext_style"
+            android:padding="5dp"
+            android:layout_marginLeft="5dp"
+            android:inputType="numberSigned|numberDecimal"
+            android:hint="Ki"/>
+        <EditText
+            android:layout_width="75dp"
+            android:layout_height="wrap_content"
+            android:id="@+id/RollKd"
+            android:background="@drawable/edittext_style"
+            android:padding="5dp"
+            android:layout_marginLeft="5dp"
+            android:inputType="numberSigned|numberDecimal"
+            android:hint="Ki"/>
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/RollOKButton"
+            android:layout_marginLeft="20dp"
+            android:text="Enter"/>
+    </LinearLayout>
+
+    <!--    pDamp   -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/pdampControllerGainsTextview"
+        android:text="p damper gains" />
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <EditText
+            android:layout_width="75dp"
+            android:layout_height="wrap_content"
+            android:id="@+id/pDampKp"
+            android:background="@drawable/edittext_style"
+            android:padding="5dp"
+            android:inputType="numberSigned|numberDecimal"
+            android:hint="Kp"/>
+        <EditText
+            android:layout_width="75dp"
+            android:layout_height="wrap_content"
+            android:id="@+id/pDampKi"
+            android:background="@drawable/edittext_style"
+            android:padding="5dp"
+            android:layout_marginLeft="5dp"
+            android:inputType="numberSigned|numberDecimal"
+            android:hint="Ki"/>
+        <EditText
+            android:layout_width="75dp"
+            android:layout_height="wrap_content"
+            android:id="@+id/pDampKd"
+            android:background="@drawable/edittext_style"
+            android:padding="5dp"
+            android:layout_marginLeft="5dp"
+            android:inputType="numberSigned|numberDecimal"
+            android:hint="Ki"/>
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/pDampOKButton"
+            android:layout_marginLeft="20dp"
+            android:text="Enter"/>
+    </LinearLayout>
+
+    <!--    q damp  -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/qdampControllerGainsTextview"
+        android:text="q damper gains" />
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <EditText
+            android:layout_width="75dp"
+            android:layout_height="wrap_content"
+            android:id="@+id/qDampKp"
+            android:background="@drawable/edittext_style"
+            android:padding="5dp"
+            android:inputType="numberSigned|numberDecimal"
+            android:hint="Kp"/>
+        <EditText
+            android:layout_width="75dp"
+            android:layout_height="wrap_content"
+            android:id="@+id/qDampKi"
+            android:background="@drawable/edittext_style"
+            android:padding="5dp"
+            android:layout_marginLeft="5dp"
+            android:inputType="numberSigned|numberDecimal"
+            android:hint="Ki"/>
+        <EditText
+            android:layout_width="75dp"
+            android:layout_height="wrap_content"
+            android:id="@+id/qDampKd"
+            android:background="@drawable/edittext_style"
+            android:padding="5dp"
+            android:layout_marginLeft="5dp"
+            android:inputType="numberSigned|numberDecimal"
+            android:hint="Ki"/>
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/qDampOKButton"
+            android:layout_marginLeft="20dp"
+            android:text="Enter"/>
+    </LinearLayout>
 
     <!--    Height controller input     -->
     <TextView

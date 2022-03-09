@@ -2,8 +2,8 @@
     <string name="app_name">Flight Controller</string>
     <string name="button1">Route planning</string>
     <string name="button2">Motor test</string>
-    <string name="button3">Sensor test</string>
-    <string name="button4">Controller directly</string>
+    <string name="button3">Autopilot</string>
+    <string name="button4">Sensor calibration</string>
     <string name="button5">USB devices</string>
     <string name="button6">Sensors</string>
     <string name="title_activity_maps">MapsActivity</string>

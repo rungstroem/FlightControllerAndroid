@@ -40,8 +40,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         getGPSConsent();
 
         //Start GPS updata service - Can't be started here until the Maps activity can accept updates from the service.
-        intent = new Intent(this, GPSService.class);
-        startService(intent);
+        //intent = new Intent(this, GPSService.class);
+        //startService(intent);
 
         //Set layout and buttons
         set_layout();
@@ -100,13 +100,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             case R.id.button3:
                 //Toast toast3 = Toast.makeText(getApplicationContext(), "You pushed the Guides button. Page is under construction", Toast.LENGTH_LONG);
                 //toast3.show();
-                Intent intent3 = new Intent(this, SensorTestActivity.class);
+                Intent intent3 = new Intent(this, AutopilotPID.class);
                 startActivity(intent3);
                 break;
             case R.id.button4:
                 //Toast toast4 = Toast.makeText(getApplicationContext(), "You pushed the Calculator button. Page is under construction", Toast.LENGTH_LONG);
                 //toast4.show();
-                Intent intent4 = new Intent(this, controlActivity.class);
+                Intent intent4 = new Intent(this, SensorCalibration.class);
                 startActivity(intent4);
                 break;
             case R.id.button5:

@@ -1,5 +1,6 @@
 package com.example.flightcontrolproof;
 
+import static java.lang.Math.E;
 import static java.lang.Math.PI;
 import static java.lang.Math.cos;
 import static java.lang.Math.pow;
@@ -32,27 +33,33 @@ public class KalmanEstimatorService extends Service {
     Looper sensorThreadLooper;
 
     Sensor accelerometer;
+    Sensor gravity;
     Sensor gyroscope;
     Sensor magnetometer;
-    Sensor geoSensor;
+    Sensor pressure;
+    Sensor orientation;
+    Sensor rotation;
 
-    Thread filterThread;
+    //Thread filterThread;
 
-    LinearAlgebra LA;
+    //LinearAlgebra LA;
 
     double rad2deg = 180.0/PI;
-    double u;
-    double v;
-    double w;
-    double p;
-    double q;
-    double r;
+    double[] euler = new double[9];
+    double uDot;
+    double vDot;
+    double wDot;
+    //double p;
+    //double q;
+    //double r;
     double accR;
     double accP;
     double accY;
-    double[] x;
+    //double gx = 0;
+    //double gy = 0;
+    //double gz = 0;
+    //double[] xVectorToController = new double[17];
 
-    Boolean stopFilterThread = false;
     public KalmanEstimatorService() {
     }
 
@@ -68,40 +75,57 @@ public class KalmanEstimatorService extends Service {
         sensorHandlerThread = new HandlerThread("Sensor handler thread");
 
         //Access to linear algebra class
-        LA = new LinearAlgebra();
+        //LA = new LinearAlgebra();
 
         //Sensor create
         mSensorManager = (SensorManager) this.getSystemService(Context.SENSOR_SERVICE);
-        accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);           //accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER); - accelerometer values with gravity
+        gravity = mSensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY);
         gyroscope = mSensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
         magnetometer = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
-        geoSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR);
+        pressure = mSensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE);
+        orientation = mSensorManager.getDefaultSensor(Sensor.TYPE_ORIENTATION);     //Older android phones have this senor  //rotation = mSensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);    //Newer android phones have this sensor
+
+        euler[6] = 0; euler[7] = 0; euler[8] = 0;
+        //Kalman
+        //filterThread = new Thread(KalmanFilter);
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startID){
+        //Sensor thread handle and looper
         sensorHandlerThread.start();
         sensorThreadLooper = sensorHandlerThread.getLooper();
         sensorThreadHandler = new Handler(sensorThreadLooper);
 
-        mSensorManager.registerListener(accListener, accelerometer, 1000, sensorThreadHandler);
-        mSensorManager.registerListener(gyroListener, gyroscope, 1000, sensorThreadHandler);
-        mSensorManager.registerListener(magListener, magnetometer,1000, sensorThreadHandler);
-        //mSensorManager.registerListener(geoListener, geoSensor, 1000, sensorThreadHandler);
+        //Sensor listeners
+        //mSensorManager.registerListener(accListener, accelerometer, 5000, sensorThreadHandler);     //5000µS is 200Hz
+        mSensorManager.registerListener(gravityListener, gravity, 5000, sensorThreadHandler);
+        mSensorManager.registerListener(gyroListener, gyroscope, 5000, sensorThreadHandler);
+        mSensorManager.registerListener(presListener, pressure, 5000, sensorThreadHandler);
+        mSensorManager.registerListener(magListener, magnetometer,5000, sensorThreadHandler);
+        mSensorManager.registerListener(orientListener, orientation, 5000, sensorThreadHandler);    //Only on older phones
+        //mSensorManager.registerListener(rotListener, rotation, 5000, sensorThreadHandler);    //Only on newer phones
+
+        //Kalman filter thread initialization
+        //filterThread.start();
+
+        Log.i("SystemState","Kalman service started");
 
         return START_STICKY;
     }
     public void onDestroy(){
-        mSensorManager.unregisterListener(accListener);
+        sensorThreadLooper.quit();  //Also to stop sensor thread
+        sensorHandlerThread.quit(); //Stops the sensor thread
+
+        //mSensorManager.unregisterListener(accListener);
+        mSensorManager.unregisterListener(presListener);
+        mSensorManager.unregisterListener(gravityListener);
         mSensorManager.unregisterListener(gyroListener);
         mSensorManager.unregisterListener(magListener);
-        //mSensorManager.unregisterListener(geoListener);
-
-        sensorThreadLooper.quit();
-        sensorHandlerThread.quit();
-        stopFilterThread = true;
-
-        Log.i("Kalman","Kalman Service stopped");
+        mSensorManager.unregisterListener(orientListener);
+        //mSensorManager.unregisterListener(rotListener);
+        Log.i("SystemState","Kalman Service stopped");
     }
 
     public void sendDataToActivity(double[] stateVector){
@@ -109,33 +133,9 @@ public class KalmanEstimatorService extends Service {
         intent.putExtra("stateVector", stateVector);
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
     }
-
-    double[][] R_BN(double R, double P, double Y){
-        double[][] RMat = new double[3][3];
-        RMat[0][0] = cos(Y) * cos(P);   RMat[0][1] = (-sin(Y))*cos(R) + cos(Y)*sin(P)*sin(R);   RMat[0][2] = sin(Y)*sin(R) + cos(Y)*cos(R)*sin(P);
-        RMat[1][0] = sin(Y) * cos(P);   RMat[1][1] = cos(Y)*cos(R) + sin(R)*sin(P)*sin(Y);      RMat[1][2] = (-cos(Y))*sin(R) + sin(P)*sin(Y)*cos(R);
-        RMat[2][0] = (-sin(P));         RMat[2][1] = cos(P)*sin(R);                             RMat[2][2] = cos(P)*cos(R);
-        return RMat;
-    }
-
-    double[][] T_BN(double R, double P){
-        double[][] TMat = new double[3][3];
-        TMat[0][0] = 1;     TMat[0][1] = sin(R)*tan(P);     TMat[0][2] = cos(R)*tan(P);
-        TMat[1][0] = 0;     TMat[1][1] = cos(R);            TMat[1][2] = (-sin(R));
-        TMat[2][0] = 0;     TMat[2][1] = sin(R)/cos(P);     TMat[2][2] = cos(R)/cos(P);
-        return TMat;
-    }
-
+/*
+    //Kalman
     double[] F = new double[14];
-    double[] a_B = new double[3];
-    double[] V_B = new double[3];
-    double[] V_N = new double[3];
-    double[] w_B = new double[3];
-    double[] E = new double[3];
-    double[] E_dot = new double[3];
-    double gx = 0;
-    double gy = 0;
-    double gz = -9.82;
     double[] stateTransistionFunction(double[] x, double[] U, double dt){
         double Px = x[0];   double Py = x[1];   double Pz = x[2];   double Vx = x[3];   double Vy = x[4];    double Vz = x[5];  double u = x[6];    double v = x[7];    double w = x[8];    double phi = x[9];  double theta = x[10];   double psi = x[11];     double Vg = x[12];  double chi = x[13];
         double ax = U[0];   double ay = U[1];   double az = x[2];   double p = U[3];    double q = U[4];     double r = U[5];
@@ -239,91 +239,132 @@ public class KalmanEstimatorService extends Service {
 
         return J;
     }
-    // x = [Px Py Pz Vx Vu Vz u v w R P Y Vg chi]
-    void startKalman() {
-        filterThread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                double[] x = new double[14];
-                double[] y = new double[14];
-                double[] U = new double[6];
-                double[][] Jt = new double[14][14];
-                double[][] P = new double[14][14];
-                double[][] Q = new double[14][14];
-                double[][] K = new double[14][14];
-                double[][] C = new double[14][14];
-                double[][] Ct = new double[14][14];
-                double[][] R = new double[14][14];
-                double[][] CPR = new double[14][14];
-                double[][] I = new double[14][14];
 
-                // Initialize state with values, position set to gps, velocity set to 0, angles set to acc and mag angles, angular velocity set to 0
-                x[0] = 0;       x[1] = 0;       x[2] = 0;       x[3] = 0;       x[4] = 0;       x[5] = 0;
-                x[6] = 0;       x[7] = 0;       x[8] = 0;       x[9] = accR;    x[10] = accP;   x[11] = accY;
-                x[12] = 0;      x[13] = 0;
+    private Runnable KalmanFilter = new Runnable() {
+        @Override
+        public void run() {
+            double[] x = new double[14];
+            double[] y = new double[14];
+            double[] U = new double[6];
+            double[][] Jt = new double[14][14];
+            double[][] P = new double[14][14];
+            double[][] Q = new double[14][14];
+            double[][] K = new double[14][14];
+            double[][] C = new double[14][14];
+            double[][] Ct = new double[14][14];
+            double[][] R = new double[14][14];
+            double[][] CPR = new double[14][14];
+            double[][] I = new double[14][14];
+            double[] testVector = new double[3];
 
-                // Initialize Q - process noise matrix and R sensor noise matrix
-                for (int i = 0; i < 14; i++) {
-                    Q[i][i] = 0.1;
-                    R[i][i] = 0.1;
-                    I[i][i] = 1;
-                }
+            // Initialize state with values, position set to gps, velocity set to 0, angles set to acc and mag angles, angular velocity set to 0
+            x[0] = 0;       x[1] = 0;       x[2] = 0;       x[3] = 0;       x[4] = 0;       x[5] = 0;       x[6] = 0;
+            x[7] = 0;       x[8] = 0;       x[9] = accR;    x[10] = accP;   x[11] = accY;   x[12] = 0;      x[13] = 0;
 
-                while (!stopFilterThread) {
-                    //Load input vector u
-                    U[0] = u; U[1] = v; U[2] = w; U[3] = p; U[4] = q; U[5] = r;   //Initialize input with ned values
-                    //Predict
-                    x = stateTransistionFunction(x, U, 0.001);    //Calculate the priori estimate
-                    J = jacobian(x, U, 0.001);      //Calculate the jacobian of F
-                    Jt = LA.matrixTranspose(J);         //matrixTranspose(J);    //Take transpose of the jacobian
-                    P = LA.matrixAdd(LA.matrixMultiply(LA.matrixMultiply(J,P),Jt),Q);   //Calculate priori covariance
-
-                    //Update 1
-                    y[0] = 0; y[1] = 0; y[2] = 0; y[3] = 0; y[4] = 0; y[5] = 0; y[6] = accR; y[7] = accP; y[8] = accY; y[9] = 0; y[10] = 0; y[11] = 0;
-                    C[0][0] = 0; C[1][1] = 0; C[2][2] = 0; C[3][3] = 0; C[4][4] = 0; C[5][5] = 0; C[6][6] = 1; C[7][7] = 1; C[8][8] = 1; C[9][9] = 0; C[10][10] = 0; C[11][11] = 0;
-                    //Intermediate steps for clarity
-                    Ct = LA.matrixTranspose(C);    //Take inverse of C
-                    CPR = LA.matrixInverse(LA.matrixAdd(LA.matrixMultiply(LA.matrixMultiply(C,P),Ct),R));  //Intermediate step for simplicity
-                    K = LA.matrixMultiply(LA.matrixMultiply(P,Ct), CPR);   //calculate kalman gain
-                    x = LA.vectAdd(x,LA.vectMatMultiply(K,LA.vectAdd(y,LA.vectMatMultiply(C,x),-1)),1);   //calculate posterior estimate
-                    P = LA.matrixMultiply(LA.matrixSubtract(I,LA.matrixMultiply(K,C)), P);    //Update posterior covariance
-
-                    //P is often 0 and therefore K is often 0 - something is wrong here.
-
-
-                    //Loop thread every 1mS
-                    try {
-                        Thread.sleep(1);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
-                Log.i("KalmanThread","Shutting down");
-                return;
+            // Initialize Q - process noise matrix and R sensor noise matrix
+            for (int i = 0; i < 14; i++) {
+                Q[i][i] = 0.1;
+                R[i][i] = 0.1;
+                I[i][i] = 1;
+                P[i][i] = 0.05;
             }
-        });
-    }
+            P[11][11] = 0.01;
 
+            while (true) {
+                //Load input vector u
+                U[0] = uDot; U[1] = vDot; U[2] = wDot; U[3] = p; U[4] = q; U[5] = r;   //Initialize input with ned values
+                //Predict
+                x = stateTransistionFunction(x, U, 0.005);    //Calculate the priori estimate
+                J = jacobian(x, U, 0.005);      //Calculate the jacobian of F
+                Jt = LA.matrixTranspose(J);         //matrixTranspose(J);    //Take transpose of the jacobian
+                P = LA.matrixAdd(LA.matrixMultiply(LA.matrixMultiply(J,P),Jt),Q);   //Calculate priori covariance
 
-    SensorEventListener geoListener = new SensorEventListener() {
-        @Override
-        public void onSensorChanged(SensorEvent sensorEvent) {
+                //Update 1
+                y[0] = 0;       y[1] = 0;       y[2] = 0;       y[3] = 0;       y[4] = 0;       y[5] = 0;       y[6] = 0;
+                y[7] = 0;       y[8] = 0;       y[9] = 0;       y[10] = 0;      y[11] = 0;      y[12] = 0;      y[13] = 0;
+                C[0][0] = 0;    C[1][1] = 0;    C[2][2] = 0;    C[3][3] = 0;    C[4][4] = 0;    C[5][5] = 0;    C[6][6] = 0;
+                C[7][7] = 0;    C[8][8] = 0;    C[9][9] = 1;    C[10][10] = 1;  C[11][11] = 1;  C[12][12] = 0;  C[13][13] = 0;
 
-        }
+                //Intermediate steps for clarity
+                Ct = LA.matrixTranspose(C);    //Take inverse of C
+                CPR = LA.matrixInverse(LA.matrixAdd(LA.matrixMultiply(LA.matrixMultiply(C,P),Ct),R));  //Intermediate step for simplicity
+                K = LA.matrixMultiply(LA.matrixMultiply(P,Ct), CPR);   //calculate kalman gain
+                x = LA.vectAdd(x,LA.vectMatMultiply(K,LA.vectAdd(y,LA.vectMatMultiply(C,x),-1)),1);   //calculate posterior estimate
+                P = LA.matrixMultiply(LA.matrixSubtract(I,LA.matrixMultiply(K,C)), P);    //Update posterior covariance
 
-        @Override
-        public void onAccuracyChanged(Sensor sensor, int i) {
+                xVectorToController[0] = x[0];          xVectorToController[1] = x[1];              xVectorToController[2] = x[2];
+                xVectorToController[3] = x[3];          xVectorToController[4] = x[4];              xVectorToController[5] = x[5];
+                xVectorToController[6] = x[6];          xVectorToController[7] = x[7];              xVectorToController[8] = x[8];
+                xVectorToController[9] = x[9]*rad2deg;  xVectorToController[10] = x[10]*rad2deg;    xVectorToController[11] = x[11]*rad2deg;
+                xVectorToController[12] = x[12];        xVectorToController[13] = x[13];
+                xVectorToController[14] = U[3];         xVectorToController[15] = U[4];             xVectorToController[16] = U[5];
 
+                //sendDataToActivity(xVectorToController);
+                testVector[0] = x[9]*rad2deg;   testVector[1] = x[10]*rad2deg;  testVector[2] = x[2]*rad2deg;
+                sendDataToActivity(testVector);
+
+                //Loop thread every 5mS - 200Hz
+                try {
+                    Thread.sleep(5);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
         }
     };
+    //End
+*/
+
+    //Sensor listeners
+    double[] lastAcc = new double[3];
+    double accFilterConst = 2;
+    double test;
+    //double[][] rotationMat = new double[3][3];
+    //double[] axis = new double[3];
     SensorEventListener accListener = new SensorEventListener() {
         @Override
         public void onSensorChanged(SensorEvent sensorEvent) {
-            u = sensorEvent.values[0];
-            v = sensorEvent.values[1];
-            w = sensorEvent.values[2];
-            accR = Math.atan2(sensorEvent.values[1], sensorEvent.values[2]) * rad2deg;
-            accP = Math.atan2(sensorEvent.values[0], Math.sqrt(Math.pow(sensorEvent.values[1],2)+(Math.pow(sensorEvent.values[2],2))))*rad2deg;
+            //uDot = sensorEvent.values[1];
+            //vDot = sensorEvent.values[0];
+            //wDot = sensorEvent.values[2];
+            //accR = Math.atan2(sensorEvent.values[0], sensorEvent.values[2]);
+            //accP = Math.atan2(sensorEvent.values[1], Math.sqrt(Math.pow(sensorEvent.values[0],2)+(Math.pow(sensorEvent.values[2],2))));
+
+            uDot = sensorEvent.values[1];
+            vDot = sensorEvent.values[0];
+            wDot = sensorEvent.values[2];
+            lastAcc[0] = (uDot-lastAcc[0])/accFilterConst;
+            lastAcc[1] = (vDot-lastAcc[1])/accFilterConst;
+            lastAcc[2] = (wDot-lastAcc[2])/accFilterConst;
+            if(lastAcc[0] < 0.05 && lastAcc[0] > -0.05) lastAcc[0] = 0;
+            if(lastAcc[1] < 0.05 && lastAcc[1] > -0.05) lastAcc[1] = 0;
+            if(lastAcc[2] < 0.2 && lastAcc[2] > -0.2) lastAcc[2] = 0;
+            test = test + 0.5*(lastAcc[0])*0.005;   //This might actually work!!
+
+            if(test < 0.00001 && test > -0.00001) test = 0;
+            Log.i("Accelerometer","x "+lastAcc[0]+" test "+test+" y "+lastAcc[1]+" z "+lastAcc[2]);
+        }
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int i) {
+
+        }
+    };
+
+    double[] lastGravity = new double[3];
+    double gravityFilterConst = 2;
+    SensorEventListener gravityListener = new SensorEventListener() {
+        @Override
+        public void onSensorChanged(SensorEvent sensorEvent) {
+            //lastGravity[1] = (sensorEvent.values[1]-lastGravity[1])/gravityFilterConst;     //x
+            //lastGravity[0] = (sensorEvent.values[0]-lastGravity[0])/gravityFilterConst;     //y
+            //lastGravity[2] = (sensorEvent.values[2]-lastGravity[2])/gravityFilterConst;     //z
+            //accR = Math.atan2(lastGravity[0], lastGravity[2])*rad2deg;    // atan2(y,z)
+            //accP = Math.atan2(-lastGravity[1], Math.sqrt(Math.pow(lastGravity[0],2)+(Math.pow(lastGravity[2],2))))*rad2deg;    // atan2(-x,sqrt(y²+z²))
+            //Log.i("Gravity","x "+lastGravity[1]+" y "+lastGravity[0]+" z "+lastGravity[2]+" R "+accR+" P "+accP);
+
+            accR = Math.atan2(sensorEvent.values[0], sensorEvent.values[2])*rad2deg;    // atan2(y,z)
+            accP = Math.atan2(-sensorEvent.values[1], Math.sqrt(Math.pow(sensorEvent.values[0],2)+(Math.pow(sensorEvent.values[2],2))))*rad2deg;    // atan2(-x,sqrt(y²+z²))
+            Log.i("Accelerometer","Acc generated euler angles "+" R "+accR+" P "+accP);
         }
 
         @Override
@@ -331,12 +372,28 @@ public class KalmanEstimatorService extends Service {
 
         }
     };
+
+    double axisX, axisY, axisZ;
+    double[] lastRates = new double[3];
+    double gyroFilterConst = 4;
     SensorEventListener gyroListener = new SensorEventListener() {
         @Override
         public void onSensorChanged(SensorEvent sensorEvent) {
-            p = sensorEvent.values[0]*rad2deg;
-            q = sensorEvent.values[1]*rad2deg;
-            r = sensorEvent.values[2]*rad2deg;
+            axisX = sensorEvent.values[1];
+            axisY = sensorEvent.values[0];
+            axisZ = sensorEvent.values[2];
+            //p = axisX;
+            //q = axisY;
+            //r = axisZ;
+            //euler[3] = axisX*rad2deg;
+            //euler[4] = axisY*rad2deg;
+            //euler[5] = axisZ*rad2deg;
+            lastRates[0] += (axisX*rad2deg-lastRates[0])/gyroFilterConst;
+            lastRates[1] += (axisY*rad2deg-lastRates[1])/gyroFilterConst;
+            lastRates[2] += (axisZ*rad2deg-lastRates[2])/gyroFilterConst;
+            euler[3] = lastRates[0];
+            euler[4] = lastRates[1];
+            euler[5] = lastRates[2];
         }
 
         @Override
@@ -344,10 +401,20 @@ public class KalmanEstimatorService extends Service {
 
         }
     };
+
+    double mNorth;
+    double mEast;
+    double lastAccY;
+    double magFilterConst = 4;
     SensorEventListener magListener = new SensorEventListener() {
         @Override
         public void onSensorChanged(SensorEvent sensorEvent) {
-            accY = Math.atan2(sensorEvent.values[1],sensorEvent.values[0])*rad2deg;
+            mNorth = sensorEvent.values[1];
+            mEast = sensorEvent.values[0];
+            accY = Math.atan2(mEast,mNorth)*rad2deg;    //atan2(East, North) - atan2(S.values[1],S.values[0])
+            lastAccY += (accY-lastAccY)/magFilterConst;
+            euler[2] = lastAccY;
+            Log.i("Magnetometer","Magnetometer generated Yaw "+accY+" Filtered "+lastAccY);
         }
 
         @Override
@@ -355,4 +422,102 @@ public class KalmanEstimatorService extends Service {
 
         }
     };
+
+    double h;
+    double M = -0.02896;
+    double R = 8.3143;
+    double T = 278.15;  //5 degree C
+    double g = 9.82;
+    double groundlevelPresure = 1025.8;    //This should be calibrated before flight. Put drone on the ground and measure average pressure.
+    double altitude;
+    double presFilterConst = 8;
+    SensorEventListener presListener = new SensorEventListener() {
+        @Override
+        public void onSensorChanged(SensorEvent sensorEvent) {
+            h = -Math.log(sensorEvent.values[0]/groundlevelPresure) * ((R*T)/(-M*g));
+            altitude += (h-altitude)/presFilterConst;
+            euler[8] = altitude;
+            Log.i("Pressure","mBar "+sensorEvent.values[0]+" height "+altitude);
+        }
+
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int i) {
+
+        }
+    };
+
+    SensorEventListener orientListener = new SensorEventListener() {
+        @Override
+        public void onSensorChanged(SensorEvent sensorEvent) {
+            //Uses taylt-brian angles "z,y,x"
+            euler[0] = sensorEvent.values[2];
+            euler[1] = sensorEvent.values[1];
+            //euler[2] = sensorEvent.values[0];   //Sensor event 0 is yaw "azimut"
+            sendDataToActivity(euler);
+        }
+
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int i) {
+
+        }
+    };
+
+    /*double[] quaternion = new double[4];
+    double[] lastEuler = new double[3];
+    SensorEventListener rotListener = new SensorEventListener() {
+        @Override
+        public void onSensorChanged(SensorEvent sensorEvent) {
+            quaternion[0] = sensorEvent.values[0];
+            quaternion[1] = sensorEvent.values[1];
+            quaternion[2] = sensorEvent.values[2];
+            quaternion[3] = sensorEvent.values[3];
+            // roll (x-axis rotation)
+
+            double sinr_cosp = 2 * (quaternion[3] * quaternion[0] + quaternion[1] * quaternion[2]);
+            double cosr_cosp = 1 - 2 * (quaternion[0] * quaternion[0] + quaternion[1] * quaternion[1]);
+            euler[1] = Math.atan2(sinr_cosp, cosr_cosp) * rad2deg;
+
+            // pitch (y-axis rotation)
+            double sinp = 2 * (quaternion[3] * quaternion[1] - quaternion[2] * quaternion[0]);
+            if (Math.abs(sinp) >= 1) {
+                euler[0] = Math.copySign (Math.PI / 2, sinp); // use 90 degrees if out of range
+            }else
+            euler[0] = Math.asin(sinp) * rad2deg;
+
+            // yaw (z-axis rotation)
+            double siny_cosp = 2 * (quaternion[3] * quaternion[2] + quaternion[0] * quaternion[1]);
+            double cosy_cosp = 1 - 2 * (quaternion[1] * quaternion[1] + quaternion[2] * quaternion[2]);
+            euler[2] = Math.atan2(siny_cosp, cosy_cosp) * rad2deg;
+
+            euler[0] = (euler[0] -lastEuler[0]) / 2.0;
+            euler[1] = (euler[1] -lastEuler[1]) / 2.0;
+            euler[2] = (euler[2] -lastEuler[2]) / 2.0;
+            lastEuler[0] = euler[0];
+            lastEuler[1] = euler[1];
+            lastEuler[2] = euler[2];
+            sendDataToActivity(euler);
+        }
+
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int i) {
+
+        }
+    };*/
+
 }
+
+    /*double[][] R_BN(double R, double P, double Y){
+        double[][] RMat = new double[3][3];
+        RMat[0][0] = cos(Y) * cos(P);   RMat[0][1] = (-sin(Y))*cos(R) + cos(Y)*sin(P)*sin(R);   RMat[0][2] = sin(Y)*sin(R) + cos(Y)*cos(R)*sin(P);
+        RMat[1][0] = sin(Y) * cos(P);   RMat[1][1] = cos(Y)*cos(R) + sin(R)*sin(P)*sin(Y);      RMat[1][2] = (-cos(Y))*sin(R) + sin(P)*sin(Y)*cos(R);
+        RMat[2][0] = (-sin(P));         RMat[2][1] = cos(P)*sin(R);                             RMat[2][2] = cos(P)*cos(R);
+        return RMat;
+    }
+
+    double[][] T_BN(double R, double P){
+        double[][] TMat = new double[3][3];
+        TMat[0][0] = 1;     TMat[0][1] = sin(R)*tan(P);     TMat[0][2] = cos(R)*tan(P);
+        TMat[1][0] = 0;     TMat[1][1] = cos(R);            TMat[1][2] = (-sin(R));
+        TMat[2][0] = 0;     TMat[2][1] = sin(R)/cos(P);     TMat[2][2] = cos(R)/cos(P);
+        return TMat;
+    }*/

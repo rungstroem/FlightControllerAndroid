@@ -22,6 +22,7 @@ public class Serialconnection {
     private int databits;
     private int TIMEOUT = 10;
     private Context mContext;
+    private boolean USBDevice = false;
 
     public Serialconnection(int baud, int databit, Context context){
         baudrate = baud;
@@ -30,12 +31,17 @@ public class Serialconnection {
         setupSerialDev();
     }
     public void finalize(){
-        try {
-            mPort.close();
-        } catch (IOException e) {
-            e.printStackTrace();
+        if(mPort != null){
+            try {
+                mPort.close();  //Unload all USB resources
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
-        mUSBCon.close();    //Unload all USB resources
+        Log.i("SystemState","USB serial stopped");
+    }
+    public boolean USBDeviceOK(){
+        return USBDevice;
     }
 
     public void setupSerialDev(){
@@ -43,9 +49,12 @@ public class Serialconnection {
         List<UsbSerialDriver> availableDrivers = UsbSerialProber.getDefaultProber().findAllDrivers(mUSBMan);
         if(availableDrivers.isEmpty()){
             Log.i("Serial","Devices - No devices");
+            Log.i("SystemState","USB serial - no device");
+            USBDevice = false;
             return;
         }else{
             Log.i("Serial","Devices - Device found");
+            USBDevice = true;
         }
         mSerialDriver = availableDrivers.get(0);
         mUSBCon = mUSBMan.openDevice(mSerialDriver.getDevice());
@@ -68,6 +77,7 @@ public class Serialconnection {
             e.printStackTrace();
             //Do nothing for now
         }
+        Log.i("SystemState","USB serial interface initialized");
     }
 
     public void rx_data(){
@@ -85,6 +95,10 @@ public class Serialconnection {
             }
         }).start();
     }
+    public void tx_data(int act, double val){
+        this.tx_data(act);
+        this.tx_data(val);
+    }
 
     public void tx_data(int data){
         byte[] conv = new byte[1];
@@ -93,7 +107,7 @@ public class Serialconnection {
     }
     public void tx_data(double data){
         byte[] conv = new byte[1];
-        conv[0] = (byte) ( (int)data & 0xFF);
+        conv[0] = (byte) ((int)data & 0xFF);
         this.tx_data(conv);
     }
     public void tx_data(byte[] data){

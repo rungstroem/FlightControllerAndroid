@@ -1,9 +1,9 @@
 package com.example.flightcontrolproof;
 
 public class PIDController {
-    private double Kp = 0.0;
-    private double Ki = 0.0;
-    private double Kd = 0.0;
+    private double Kp;
+    private double Ki;
+    private double Kd;
     private double saturationH = 100;
     private double saturationL = 0;
     private double integrator;
@@ -16,6 +16,10 @@ public class PIDController {
 
     private double error;       //Current error
     private double error_d1;    //Error delayed 1 sample period
+
+    private double lastU;
+    private double filterConstant = 4;
+    private double deadZone = 1;
 
     public PIDController(double KP, double KI, double KD){
         this.Kp = KP;
@@ -30,6 +34,13 @@ public class PIDController {
     public void setSaturation(double satH, double satL){
         saturationH = satH;
         saturationL = satL;
+    }
+
+    public void setFilterConstant(double fConst){
+        filterConstant = fConst;
+    }
+    public void setDeadZone(double dZ){
+        deadZone = dZ;
     }
 
     public void setGains(double KP, double KI, double KD){
@@ -49,6 +60,10 @@ public class PIDController {
         return uSaturated;
     }
 
+    double steadyZone(double u){
+        return ( (-deadZone<u) ? ( (u<deadZone) ? 0 : u) : u);    // is (-5<u) ? yes : no
+    }
+
     public double control(double y_c, double y, double Ts, double tau){     //Specific tau constant
         error = y_c - y;
         integrator = integrator + (Ts/2) * (error + error_d1);
@@ -62,7 +77,9 @@ public class PIDController {
             integrator = integrator + Ts/Ki * (u-uUnsaturated);
         }
 
-        return u;
+        lastU += (u-lastU) / filterConstant;
+        lastU = steadyZone(lastU);
+        return lastU;
     }
 
     public double control(double y_c, double y, double Ts){         //Standard tau constant
@@ -78,6 +95,8 @@ public class PIDController {
             integrator = integrator + Ts/Ki * (u-uUnsaturated);
         }
 
-        return u;
+        //Lowpass filter
+        lastU += (u-lastU) / filterConstant;
+        return lastU;
     }
 }
