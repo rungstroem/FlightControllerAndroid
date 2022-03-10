@@ -15,6 +15,7 @@
         <entry key="app/src/main/res/layout/activity_sensor_calibration.xml" value="0.23541666666666666" />
         <entry key="app/src/main/res/layout/activity_sensor_test.xml" value="0.17708333333333334" />
         <entry key="app/src/main/res/layout/activity_usbdevices.xml" value="0.15489130434782608" />
+        <entry key="app/src/main/res/layout/activity_wifi_communication_client.xml" value="0.24270833333333333" />
         <entry key="app/src/main/res/layout/content_guides.xml" value="0.23385416666666667" />
         <entry key="app/src/main/res/layout/fragment_first.xml" value="0.23385416666666667" />
         <entry key="app/src/main/res/xml/device_filter.xml" value="0.13134057971014493" />

@@ -6,6 +6,7 @@
     <string name="button4">Sensor calibration</string>
     <string name="button5">USB devices</string>
     <string name="button6">Sensors</string>
+    <string name="button7">Wifi Client</string>
     <string name="title_activity_maps">MapsActivity</string>
     <string name="RouteFinish">Route finished</string>
     <string name="DeletePoint">Clear map</string>

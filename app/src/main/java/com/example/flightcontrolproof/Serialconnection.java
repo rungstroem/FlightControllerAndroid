@@ -99,7 +99,10 @@ public class Serialconnection {
         this.tx_data(act);
         this.tx_data(val);
     }
-
+    public void tx_data(int act, int val){
+        this.tx_data(act);
+        this.tx_data(val);
+    }
     public void tx_data(int data){
         byte[] conv = new byte[1];
         conv[0] = (byte) (data & 0xFF);

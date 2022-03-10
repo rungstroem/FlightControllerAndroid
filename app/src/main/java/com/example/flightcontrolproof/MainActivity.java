@@ -31,8 +31,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private Button mButton4;
     private Button mButton5;
     private Button mButton6;
+    private Button mButton7;
     private TextView mTextView;
-    Intent intent;
+
+    Intent GPSIntent;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -40,8 +43,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         getGPSConsent();
 
         //Start GPS updata service - Can't be started here until the Maps activity can accept updates from the service.
-        //intent = new Intent(this, GPSService.class);
-        //startService(intent);
+        //GPSIntent = new Intent(this, GPSService.class);
+        //startService(GPSIntent);
 
         //Set layout and buttons
         set_layout();
@@ -54,7 +57,16 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         mButton4.setOnClickListener(this);
         mButton5.setOnClickListener(this);
         mButton6.setOnClickListener(this);
+        mButton7.setOnClickListener(this);
+
     }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+
+    }
+
     private void getGPSConsent(){
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
@@ -76,12 +88,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         mButton4 = (Button) findViewById(R.id.button4);
         mButton5 = (Button) findViewById(R.id.button5);
         mButton6 = (Button) findViewById(R.id.button6);
+        mButton7 = (Button) findViewById(R.id.button7);
         mButton1.setWidth(buttonSize);
         mButton2.setWidth(buttonSize);
         mButton3.setWidth(buttonSize);
         mButton4.setWidth(buttonSize);
         mButton5.setWidth(buttonSize);
         mButton6.setWidth(buttonSize);
+        mButton7.setWidth(buttonSize);
     }
     @Override
     public void onClick(View v){
@@ -92,20 +106,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 startActivity(intent1);
                 break;
             case R.id.button2:
-                //Toast toast2 = Toast.makeText(getApplicationContext(), "You pushed the How To button. Page is under construction", Toast.LENGTH_LONG);
-                //toast2.show();
                 Intent intent2 = new Intent(this, MotorTestActivity.class);
                 startActivity(intent2);
                 break;
             case R.id.button3:
-                //Toast toast3 = Toast.makeText(getApplicationContext(), "You pushed the Guides button. Page is under construction", Toast.LENGTH_LONG);
-                //toast3.show();
                 Intent intent3 = new Intent(this, AutopilotPID.class);
                 startActivity(intent3);
                 break;
             case R.id.button4:
-                //Toast toast4 = Toast.makeText(getApplicationContext(), "You pushed the Calculator button. Page is under construction", Toast.LENGTH_LONG);
-                //toast4.show();
                 Intent intent4 = new Intent(this, SensorCalibration.class);
                 startActivity(intent4);
                 break;
@@ -116,6 +124,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             case R.id.button6:
                 Intent intent6 = new Intent(this, ListSensors.class);
                 startActivity(intent6);
+                break;
+            case R.id.button7:
+                Intent intent7 = new Intent(this,WifiCommunicationClient.class);
+                startActivity(intent7);
+                break;
             default:
                 break;
         }

@@ -80,6 +80,8 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
 
     Intent KalmanIntent;
     Intent GuidanceIntent;
+    Intent WifiIntent;
+
     Thread controllerThread;
     Thread guidanceThread;
     Thread altitudeThread;
@@ -91,6 +93,10 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
     PIDController heightController;
     PIDController rollController;
     PIDController pRateController;
+
+    double RollSetpoint = 0;
+    double PitchSetpoint = 0;
+    int throttleSetpoint = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -156,12 +162,17 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         //Start Guidance service
         GuidanceIntent = new Intent(this, GuidanceService.class);
         //startService(GuidanceIntent);
+        //Start Wifi communication
+        WifiIntent = new Intent(this,WifiCommunicationService.class);
+        startService(WifiIntent);
 
         //Register receiver for Kalman data
         LocalBroadcastManager.getInstance(this).registerReceiver(KalmanReceiver, new IntentFilter("KalmanUpdate"));
-        //Register receivers for guidance data
+        //Register receivers for Guidance data
         LocalBroadcastManager.getInstance(this).registerReceiver(altitudeReceiver, new IntentFilter("AltitudeGuidanceUpdate"));
         LocalBroadcastManager.getInstance(this).registerReceiver(guidanceReceiver, new IntentFilter("GuidanceUpdate"));
+        //Register receiver for Wifi data
+        LocalBroadcastManager.getInstance(this).registerReceiver(wifiReceiver, new IntentFilter("WifiUpdate"));
 
         //Initialize PID controllers
         pitchController = new PIDController(pitchKp, pitchKi, pitchKd);
@@ -198,6 +209,7 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
 
         stopService(KalmanIntent);
         stopService(GuidanceIntent);
+        stopService(WifiIntent);
         threadInterrupt = true;
         serialconnection.finalize();
 
@@ -229,6 +241,18 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         }
     };
 
+    private BroadcastReceiver wifiReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            Bundle b = intent.getExtras();
+            throttleSetpoint = b.getInt("throttleCommand");
+            if(serialconnection.USBDeviceOK()){
+                serialconnection.tx_data(0x01, throttleSetpoint);
+            }
+            Log.i("wifiUpdate","Throttle command "+throttleSetpoint);
+        }
+    };
+
     double[] limitAndOffsetOutput(double[] inputVector){
         if(inputVector[0] < -35) inputVector[0] = -35;
         if(inputVector[1] < -35) inputVector[1] = -35;
@@ -246,8 +270,6 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
     double[] LR = new double[2];
     double[][] Mixing = new double[2][2];
     byte[] csData = new byte[4];
-    double RollSetpoint = 0;
-    double PitchSetpoint = 0;
     int sampleTime = 0;
     private Runnable controller = new Runnable() {
         @Override
