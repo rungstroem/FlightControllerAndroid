@@ -153,9 +153,9 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         //Start Kalman service
         KalmanIntent = new Intent(this, KalmanEstimatorService.class);
         startService(KalmanIntent);
-        //Start guidance service
+        //Start Guidance service
         GuidanceIntent = new Intent(this, GuidanceService.class);
-        startService(GuidanceIntent);
+        //startService(GuidanceIntent);
 
         //Register receiver for Kalman data
         LocalBroadcastManager.getInstance(this).registerReceiver(KalmanReceiver, new IntentFilter("KalmanUpdate"));
@@ -175,18 +175,18 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         pRateController = new PIDController(qRateKp,qRateKi,qRateKd);
         pRateController.setSaturation(35,-35);
 
+        //Test data
         waypointList = new double[2][2];
         waypointList[0][0] = 2; waypointList[0][1] = 3;
         waypointList[1][0] = 4; waypointList[1][1] = 8;
 
-        //guidanceThread = new Thread(guidanceLOS);
-        //guidanceThread.start();
-
-        //altitudeThread = new Thread(guidanceAltitude);
-        //altitudeThread.start();
-
+        //Start threads
         controllerThread = new Thread(controller);
         controllerThread.start();
+        //guidanceThread = new Thread(guidanceLOS);
+        //guidanceThread.start();
+        //altitudeThread = new Thread(guidanceAltitude);
+        //altitudeThread.start();
 
         Log.i("SystemState","Autopilot started");
     }
@@ -195,6 +195,7 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
     protected void onDestroy() {
         super.onDestroy();
         wakeLock.release(); //CPU can throttle down again - saves battery
+
         stopService(KalmanIntent);
         stopService(GuidanceIntent);
         threadInterrupt = true;
@@ -356,7 +357,7 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         }
     }
 
-    double rAcceptance = 5;  //5m radius of acceptance
+    /*double rAcceptance = 5;  //5m radius of acceptance
     double setPoint;
     int waypointPointer = 0;
     private Runnable guidanceCC = new Runnable() {
@@ -489,7 +490,7 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
             }
             Log.i("SystemState","Altitude guidance thread shutting down");
         }
-    };
+    };*/
 
 
     // This is a thread for sending serial data. It waits 50mS between sending commands. Use this if the µC cannot keep up

@@ -11,6 +11,7 @@ import static java.lang.Math.tan;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -40,8 +41,10 @@ public class KalmanEstimatorService extends Service {
     Sensor orientation;
     Sensor rotation;
 
-    //Thread filterThread;
+    double groundlevelPresure;    //This should be calibrated before flight. Put drone on the ground and measure average pressure.
+    double ambientTemperature;
 
+    //Thread filterThread;
     //LinearAlgebra LA;
 
     double rad2deg = 180.0/PI;
@@ -86,8 +89,15 @@ public class KalmanEstimatorService extends Service {
         pressure = mSensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE);
         orientation = mSensorManager.getDefaultSensor(Sensor.TYPE_ORIENTATION);     //Older android phones have this senor  //rotation = mSensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);    //Newer android phones have this sensor
 
+        //Get calibration data
+        SharedPreferences mSharedPref = getSharedPreferences("CalibrationData", Context.MODE_PRIVATE);
+        groundlevelPresure = getPreference(mSharedPref, "BarometerCalibration", 1025);
+        ambientTemperature = getPreference(mSharedPref, "AmbientTemperature", 20) + 273.15;     //Temp in degrees C + 273.15K
+
+        //Just initialize position to 0 for now
         euler[6] = 0; euler[7] = 0; euler[8] = 0;
-        //Kalman
+
+        //Start Kalman filter thread
         //filterThread = new Thread(KalmanFilter);
     }
 
@@ -126,6 +136,12 @@ public class KalmanEstimatorService extends Service {
         mSensorManager.unregisterListener(orientListener);
         //mSensorManager.unregisterListener(rotListener);
         Log.i("SystemState","Kalman Service stopped");
+    }
+
+    double getPreference(final SharedPreferences prefs, final String key, final double defaultValue) {
+        if ( !prefs.contains(key))
+            return defaultValue;
+        return Double.longBitsToDouble(prefs.getLong(key, 0));
     }
 
     public void sendDataToActivity(double[] stateVector){
@@ -426,16 +442,14 @@ public class KalmanEstimatorService extends Service {
     double h;
     double M = -0.02896;
     double R = 8.3143;
-    double T = 278.15;  //5 degree C
     double g = 9.82;
-    double groundlevelPresure = 1025.8;    //This should be calibrated before flight. Put drone on the ground and measure average pressure.
     double altitude;
-    double presFilterConst = 8;
+    double pressFilterConst = 8;
     SensorEventListener presListener = new SensorEventListener() {
         @Override
         public void onSensorChanged(SensorEvent sensorEvent) {
-            h = -Math.log(sensorEvent.values[0]/groundlevelPresure) * ((R*T)/(-M*g));
-            altitude += (h-altitude)/presFilterConst;
+            h = -Math.log(sensorEvent.values[0]/groundlevelPresure) * ((R*ambientTemperature)/(-M*g));
+            altitude += (h-altitude)/pressFilterConst;
             euler[8] = altitude;
             Log.i("Pressure","mBar "+sensorEvent.values[0]+" height "+altitude);
         }

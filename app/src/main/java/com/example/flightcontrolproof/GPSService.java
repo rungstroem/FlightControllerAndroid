@@ -51,6 +51,8 @@ public class GPSService extends Service {
         GPSLooper = GPSHandlerThread.getLooper();
         mLocationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
         mLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,0,0,GPSListener, GPSLooper);
+
+        Log.i("SystemState","GPS service started");
         return START_STICKY;
     }
 
@@ -75,5 +77,6 @@ public class GPSService extends Service {
         mLocationManager.removeUpdates(GPSListener);
         GPSLooper.quit();
         GPSHandlerThread.quit();
+        Log.i("SystemState","GPS service stopped");
     }
 }

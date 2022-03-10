@@ -47,6 +47,7 @@ public class GuidanceService extends Service {
         //Register receiver for altitude controller gain update
         LocalBroadcastManager.getInstance(this).registerReceiver(altitudeGuidanceGainUpdate, new IntentFilter("AltitudeGuidanceGainUpdate"));
 
+        //Test waypoint list
         waypointList = new double[2][2];
         waypointList[0][0] = 2; waypointList[0][1] = 3;
         waypointList[1][0] = 4; waypointList[1][1] = 8;
