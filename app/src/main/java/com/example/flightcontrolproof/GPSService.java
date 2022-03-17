@@ -83,6 +83,10 @@ public class GPSService extends Service {
             //sendDataToActivity(location);
             sendUTMtoActivity(location);
         }
+        @Override
+        public void onStatusChanged(String provider, int status, Bundle extras){
+            //Do nothing for now -- May be called on older android versions but not on version Q and above
+        }
     };
 
     public void onDestroy(){

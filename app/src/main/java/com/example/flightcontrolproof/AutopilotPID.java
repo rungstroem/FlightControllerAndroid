@@ -170,7 +170,7 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         startService(WifiIntent);
         //Start GPS service
         GPSIntent = new Intent(this,GPSService.class);
-        //startService(GPSIntent);
+        startService(GPSIntent);
 
         //Register receiver for Kalman data
         LocalBroadcastManager.getInstance(this).registerReceiver(KalmanReceiver, new IntentFilter("KalmanUpdate"));
@@ -216,7 +216,7 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         stopService(KalmanIntent);
         stopService(GuidanceIntent);
         stopService(WifiIntent);
-        //stopService(GPSIntent);   //Wifi and LocationManager doesn't work simultaniously
+        stopService(GPSIntent);   //Wifi and LocationManager doesn't work simultaniously
 
         threadInterrupt = true;
         serialconnection.finalize();

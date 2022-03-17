@@ -45,19 +45,21 @@ public class KalmanEstimatorService extends Service {
 
     double groundlevelPresure;    //This should be calibrated before flight. Put drone on the ground and measure average pressure.
     double ambientTemperature;
-
-    //Thread filterThread;
-    //LinearAlgebra LA;
-
     double rad2deg = 180.0/PI;
+
+    volatile boolean threadInterrupt = false;
+    Thread filterThread;
+    LinearAlgebra LA;
+
+
     double[] euler = new double[9];
     double[] UTMPos = new double[3];
     double uDot;
     double vDot;
     double wDot;
-    //double p;
-    //double q;
-    //double r;
+    double p;
+    double q;
+    double r;
     double accR;
     double accP;
     double accY;
@@ -84,12 +86,11 @@ public class KalmanEstimatorService extends Service {
         LocalBroadcastManager.getInstance(this).registerReceiver(GPSReceiver, new IntentFilter("GPSLocationUpdates"));
 
         //Access to linear algebra class
-        //LA = new LinearAlgebra();
+        LA = new LinearAlgebra();
 
         //Sensor create
         mSensorManager = (SensorManager) this.getSystemService(Context.SENSOR_SERVICE);
-        //accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);           //accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER); - accelerometer values with gravity
-        accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);           //accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER); - accelerometer values with gravity
         gravity = mSensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY);
         gyroscope = mSensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
         magnetometer = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
@@ -109,7 +110,7 @@ public class KalmanEstimatorService extends Service {
         lastPos[0] = 0; lastPos[1] = 0; lastPos[2] = 0;
 
         //Start Kalman filter thread
-        //filterThread = new Thread(KalmanFilter);
+        filterThread = new Thread(complementaryFilterAttitude);
     }
 
     @Override
@@ -129,7 +130,7 @@ public class KalmanEstimatorService extends Service {
         //mSensorManager.registerListener(rotListener, rotation, 5000, sensorThreadHandler);    //Only on newer phones
 
         //Kalman filter thread initialization
-        //filterThread.start();
+        filterThread.start();
 
         Log.i("SystemState","Kalman service started");
 
@@ -138,6 +139,7 @@ public class KalmanEstimatorService extends Service {
     public void onDestroy(){
         sensorThreadLooper.quit();  //Also to stop sensor thread
         sensorHandlerThread.quit(); //Stops the sensor thread
+        threadInterrupt = true;
 
         mSensorManager.unregisterListener(accListener);
         mSensorManager.unregisterListener(presListener);
@@ -160,6 +162,53 @@ public class KalmanEstimatorService extends Service {
         intent.putExtra("stateVector", stateVector);
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
     }
+
+    double[][] T_BN(double R, double P){
+        double[][] TMat = new double[3][3];
+        TMat[0][0] = 1;     TMat[0][1] = sin(R)*tan(P);     TMat[0][2] = cos(R)*tan(P);
+        TMat[1][0] = 0;     TMat[1][1] = cos(R);            TMat[1][2] = (-sin(R));
+        TMat[2][0] = 0;     TMat[2][1] = sin(R)/cos(P);     TMat[2][2] = cos(R)/cos(P);
+        return TMat;
+    }
+
+    private Runnable complementaryFilterAttitude = new Runnable() {     //This actually works
+        double[] accAngles = new double[3];
+        double[] gyroRates = new double[3];
+        double[] gyroAngles = new double[3];
+        double[] estAngles = {accR, accP, accY};
+        double[][] TMat_BN;
+        double K = 0.02;    //Tuning parameter
+        double dt = 0.005;
+        @Override
+        public void run() {
+            while (!threadInterrupt) {
+                accAngles[0] = accR;
+                accAngles[1] = accP;
+                accAngles[2] = accY;
+                gyroRates[0] = p;
+                gyroRates[1] = q;
+                gyroRates[2] = r;
+                TMat_BN = T_BN(estAngles[0], estAngles[1]);
+                gyroAngles = LA.vectConstMultiply(LA.vectMatMultiply(TMat_BN, gyroRates), dt);
+                estAngles[0] += gyroAngles[0];
+                estAngles[1] += gyroAngles[1];
+                estAngles[2] += gyroAngles[2];
+
+                //Actual filter algorithm
+                estAngles[0] = (1 - K) * estAngles[0] + K * accAngles[0];
+                estAngles[1] = (1 - K) * estAngles[1] + K * accAngles[1];
+                estAngles[2] = (1 - K) * estAngles[2] + K * accAngles[2];
+
+                Log.i("ComplementaryFilter", "R " + estAngles[0] + " P " + estAngles[1] + " Y " + estAngles[2]);
+                //Loop thread every 5mS - 200Hz
+                try {
+                    Thread.sleep(5);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    };
 /*
     //Kalman
     double[] F = new double[14];
@@ -461,18 +510,18 @@ public class KalmanEstimatorService extends Service {
     SensorEventListener gyroListener = new SensorEventListener() {
         @Override
         public void onSensorChanged(SensorEvent sensorEvent) {
-            axisX = sensorEvent.values[1];
-            axisY = sensorEvent.values[0];
-            axisZ = sensorEvent.values[2];
+            p = sensorEvent.values[1]*rad2deg;  //X-axis
+            q = sensorEvent.values[0]*rad2deg;  //Y-axis
+            r = sensorEvent.values[2]*rad2deg;  //Z-axis
             //p = axisX;
             //q = axisY;
             //r = axisZ;
             //euler[3] = axisX*rad2deg;
             //euler[4] = axisY*rad2deg;
             //euler[5] = axisZ*rad2deg;
-            lastRates[0] += (axisX*rad2deg-lastRates[0])/gyroFilterConst;
-            lastRates[1] += (axisY*rad2deg-lastRates[1])/gyroFilterConst;
-            lastRates[2] += (axisZ*rad2deg-lastRates[2])/gyroFilterConst;
+            lastRates[0] += (p-lastRates[0])/gyroFilterConst;
+            lastRates[1] += (q-lastRates[1])/gyroFilterConst;
+            lastRates[2] += (r-lastRates[2])/gyroFilterConst;
             euler[3] = lastRates[0];
             euler[4] = lastRates[1];
             euler[5] = lastRates[2];
