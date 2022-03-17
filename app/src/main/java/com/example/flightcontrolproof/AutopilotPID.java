@@ -7,10 +7,12 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.PowerManager;
 import android.security.keystore.SecureKeyImportUnavailableException;
 import android.text.TextUtils;
+import android.text.format.Formatter;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -81,6 +83,7 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
     Intent KalmanIntent;
     Intent GuidanceIntent;
     Intent WifiIntent;
+    Intent GPSIntent;
 
     Thread controllerThread;
     Thread guidanceThread;
@@ -165,6 +168,9 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         //Start Wifi communication
         WifiIntent = new Intent(this,WifiCommunicationService.class);
         startService(WifiIntent);
+        //Start GPS service
+        GPSIntent = new Intent(this,GPSService.class);
+        //startService(GPSIntent);
 
         //Register receiver for Kalman data
         LocalBroadcastManager.getInstance(this).registerReceiver(KalmanReceiver, new IntentFilter("KalmanUpdate"));
@@ -210,6 +216,8 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         stopService(KalmanIntent);
         stopService(GuidanceIntent);
         stopService(WifiIntent);
+        //stopService(GPSIntent);   //Wifi and LocationManager doesn't work simultaniously
+
         threadInterrupt = true;
         serialconnection.finalize();
 
@@ -241,15 +249,42 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         }
     };
 
+    byte[] throttleData = new byte[2];
+    int[] wifiData = new int[10];
+    int ThrottleCommandWifi = 116;
+    int AttitudeCommandWifi = 114;
+    int pitchTemp;
+    int rollTemp;
     private BroadcastReceiver wifiReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            Bundle b = intent.getExtras();
+            /*Bundle b = intent.getExtras();
             throttleSetpoint = b.getInt("throttleCommand");
+            throttleData[0] = 0x01;
+            throttleData[1] = (byte) ((throttleSetpoint) & 0xFF);
             if(serialconnection.USBDeviceOK()){
-                serialconnection.tx_data(0x01, throttleSetpoint);
+                serialconnection.tx_data(throttleData);
+            }*/
+            Bundle b = intent.getExtras();
+            wifiData = b.getIntArray("commands");
+            if(wifiData[0] == ThrottleCommandWifi){
+                throttleData[0] = 0x01;
+                throttleData[1] = (byte) ((wifiData[1]) & 0xFF);
+                if(serialconnection.USBDeviceOK()) serialconnection.tx_data(throttleData);
+                Log.i("wifiUpdate","Throttle command "+throttleData[1]);
             }
-            Log.i("wifiUpdate","Throttle command "+throttleSetpoint);
+            if(wifiData[0] == AttitudeCommandWifi){
+                rollTemp = wifiData[1]*2-100;
+                pitchTemp = wifiData[2]*2-100;
+                if(rollTemp > 80) rollTemp = 80;
+                if(rollTemp < -80) rollTemp = -80;
+                RollSetpoint = rollTemp;
+                Log.i("wifiUpdate", "RollSetpoint "+RollSetpoint);
+                if(pitchTemp > 80) pitchTemp = 80;
+                if(pitchTemp < -80) pitchTemp = -80;
+                PitchSetpoint = pitchTemp;
+                Log.i("wifiUpdate", "PitchSetpoint "+PitchSetpoint);
+            }
         }
     };
 

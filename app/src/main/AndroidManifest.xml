@@ -26,6 +26,9 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.FlightControlProof">
         <activity
+            android:name=".GameControl"
+            android:exported="true" />
+        <activity
             android:name=".WifiCommunicationClient"
             android:exported="true" />
 

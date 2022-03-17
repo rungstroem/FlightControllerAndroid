@@ -61,9 +61,17 @@ public class WifiCommunicationService extends Service {
         intent.putExtra("throttleCommand", data);
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
     }
+    public void sendDataToAutopilot(int[] data){
+        Intent intent = new Intent("WifiUpdate");
+        intent.putExtra("commands",data);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+    }
 
     private Runnable WifiCommunication = new Runnable() {
+        int i = 0;
         int dataInBuffer;
+        int[] dataBuffer = new int[10];
+        int[] commLost = new int[10];
         DataInputStream dataIn;
         volatile boolean socketAccept = true;
         volatile boolean readSuccess = true;
@@ -80,7 +88,6 @@ public class WifiCommunicationService extends Service {
                         try {
                             socket = serverSocket.accept();
                             dataIn = new DataInputStream(new DataInputStream(socket.getInputStream()));
-                            //DataInputStream dataIn = new DataInputStream(new DataInputStream((socket.getInputStream())));
                         }catch (SocketTimeoutException te){
                             socketAccept = false;
                         }
@@ -91,12 +98,21 @@ public class WifiCommunicationService extends Service {
                                     if (dataInBuffer == -1) {   //Read end-of-line ie no active connection
                                         Log.i("WifiConnection", "Connection lost");
                                         comunicationLost = true;
-                                        sendDataToActivity(0);    //Turn off motor if connection is lost
+                                        //sendDataToActivity(0);    //Turn off motor if connection is lost
+                                        commLost[0] = 116;  commLost[1] = 0;
+                                        sendDataToAutopilot(commLost);
                                         dataIn.close();
                                         socket.close();
                                     } else {
+                                        if(dataInBuffer == 120){
+                                            i = 0;
+                                            sendDataToAutopilot(dataBuffer);
+                                        }else {
+                                            dataBuffer[i] = dataInBuffer;
+                                            i++;
+                                        }
                                         Log.i("WifiConnection", "data " + dataInBuffer);
-                                        sendDataToActivity(dataInBuffer);
+                                        //sendDataToActivity(dataInBuffer);
                                     }
                                 }catch (SocketTimeoutException tee){
 

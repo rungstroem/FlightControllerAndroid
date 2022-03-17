@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools" android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity"
+    android:transitionGroup="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center_horizontal">
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <EditText
+            android:layout_width="200dp"
+            android:layout_height="wrap_content"
+            android:id="@+id/inputIP"
+            android:background="@drawable/edittext_style"
+            android:padding="5dp"
+            android:inputType="number|numberDecimal"
+            android:digits="0123456789."
+            android:hint="Input FC ip"/>
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/inputIPOKButton"
+            android:layout_marginLeft="20dp"
+            android:text="Enter"/>
+    </LinearLayout>
+
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <ImageView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clickable="true"
+            android:focusable="true"
+            android:id="@+id/ButtonL"
+            android:src="@drawable/blackcircle980x980"
+            android:layout_weight="1"
+            android:layout_margin="15dp"/>
+
+        <ImageView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clickable="true"
+            android:focusable="true"
+            android:id="@+id/ButtonR"
+            android:src="@drawable/blackcircle980x980"
+            android:layout_weight="1"
+            android:layout_margin="15dp"/>
+
+    </LinearLayout>
+    </LinearLayout>
+</RelativeLayout>

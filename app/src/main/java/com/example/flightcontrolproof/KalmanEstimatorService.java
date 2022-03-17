@@ -9,8 +9,10 @@ import static java.lang.Math.sqrt;
 import static java.lang.Math.tan;
 
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -49,6 +51,7 @@ public class KalmanEstimatorService extends Service {
 
     double rad2deg = 180.0/PI;
     double[] euler = new double[9];
+    double[] UTMPos = new double[3];
     double uDot;
     double vDot;
     double wDot;
@@ -77,12 +80,16 @@ public class KalmanEstimatorService extends Service {
         //Sensor thread create
         sensorHandlerThread = new HandlerThread("Sensor handler thread");
 
+        //Register GPS receiver
+        LocalBroadcastManager.getInstance(this).registerReceiver(GPSReceiver, new IntentFilter("GPSLocationUpdates"));
+
         //Access to linear algebra class
         //LA = new LinearAlgebra();
 
         //Sensor create
         mSensorManager = (SensorManager) this.getSystemService(Context.SENSOR_SERVICE);
-        accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);           //accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER); - accelerometer values with gravity
+        //accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);           //accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER); - accelerometer values with gravity
+        accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         gravity = mSensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY);
         gyroscope = mSensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
         magnetometer = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
@@ -97,6 +104,10 @@ public class KalmanEstimatorService extends Service {
         //Just initialize position to 0 for now
         euler[6] = 0; euler[7] = 0; euler[8] = 0;
 
+        lastAcc[0] = 0; lastAcc[1] = 0; lastAcc[2] = 0;
+        lastVel[0] = 0; lastVel[1] = 0; lastVel[2] = 0;
+        lastPos[0] = 0; lastPos[1] = 0; lastPos[2] = 0;
+
         //Start Kalman filter thread
         //filterThread = new Thread(KalmanFilter);
     }
@@ -109,7 +120,7 @@ public class KalmanEstimatorService extends Service {
         sensorThreadHandler = new Handler(sensorThreadLooper);
 
         //Sensor listeners
-        //mSensorManager.registerListener(accListener, accelerometer, 5000, sensorThreadHandler);     //5000µS is 200Hz
+        mSensorManager.registerListener(accListener, accelerometer, 5000, sensorThreadHandler);     //5000µS is 200Hz
         mSensorManager.registerListener(gravityListener, gravity, 5000, sensorThreadHandler);
         mSensorManager.registerListener(gyroListener, gyroscope, 5000, sensorThreadHandler);
         mSensorManager.registerListener(presListener, pressure, 5000, sensorThreadHandler);
@@ -128,7 +139,7 @@ public class KalmanEstimatorService extends Service {
         sensorThreadLooper.quit();  //Also to stop sensor thread
         sensorHandlerThread.quit(); //Stops the sensor thread
 
-        //mSensorManager.unregisterListener(accListener);
+        mSensorManager.unregisterListener(accListener);
         mSensorManager.unregisterListener(presListener);
         mSensorManager.unregisterListener(gravityListener);
         mSensorManager.unregisterListener(gyroListener);
@@ -333,8 +344,16 @@ public class KalmanEstimatorService extends Service {
 
     //Sensor listeners
     double[] lastAcc = new double[3];
-    double accFilterConst = 2;
-    double test;
+    double[] thisAcc = new double[3];
+    double[] lastVel = new double[3];
+    double[] thisVel = new double[3];
+    double[] thisPos = new double[3];
+    double[] lastPos = new double[3];
+    int count = 0;
+    int count2 = 10;
+    double currentTime;
+    double t0;
+    double deltaT;
     //double[][] rotationMat = new double[3][3];
     //double[] axis = new double[3];
     SensorEventListener accListener = new SensorEventListener() {
@@ -345,20 +364,67 @@ public class KalmanEstimatorService extends Service {
             //wDot = sensorEvent.values[2];
             //accR = Math.atan2(sensorEvent.values[0], sensorEvent.values[2]);
             //accP = Math.atan2(sensorEvent.values[1], Math.sqrt(Math.pow(sensorEvent.values[0],2)+(Math.pow(sensorEvent.values[2],2))));
-
+            /*
             uDot = sensorEvent.values[1];
             vDot = sensorEvent.values[0];
             wDot = sensorEvent.values[2];
             lastAcc[0] = (uDot-lastAcc[0])/accFilterConst;
             lastAcc[1] = (vDot-lastAcc[1])/accFilterConst;
             lastAcc[2] = (wDot-lastAcc[2])/accFilterConst;
-            if(lastAcc[0] < 0.05 && lastAcc[0] > -0.05) lastAcc[0] = 0;
-            if(lastAcc[1] < 0.05 && lastAcc[1] > -0.05) lastAcc[1] = 0;
+            if(lastAcc[0] < 0.1 && lastAcc[0] > -0.1) lastAcc[0] = 0;
+            if(lastAcc[1] < 0.1 && lastAcc[1] > -0.1) lastAcc[1] = 0;
             if(lastAcc[2] < 0.2 && lastAcc[2] > -0.2) lastAcc[2] = 0;
-            test = test + 0.5*(lastAcc[0])*0.005;   //This might actually work!!
+            test2 = test2 + lastAcc[0];
+            test = test + test2*0.005 + 0.5*(lastAcc[0])*0.005;   //This might actually work!!
 
             if(test < 0.00001 && test > -0.00001) test = 0;
-            Log.i("Accelerometer","x "+lastAcc[0]+" test "+test+" y "+lastAcc[1]+" z "+lastAcc[2]);
+             */
+            /*
+            thisAcc[0] = sensorEvent.values[1];
+            thisAcc[1] = sensorEvent.values[0];
+            thisAcc[2] = sensorEvent.values[2];
+
+            if (thisAcc[0] < 0.1 && thisAcc[0] > -0.1) thisAcc[0] = 0;
+            if (thisAcc[1] < 0.1 && thisAcc[1] > -0.1) thisAcc[1] = 0;
+            if (thisAcc[2] < 0.1 && thisAcc[2] > -0.1) thisAcc[2] = 0;
+
+            thisVel[0] = lastVel[0] + lastAcc[0] + (thisAcc[0] - lastAcc[0]) / 2;
+            thisPos[0] = lastPos[0] + lastVel[0] + (thisVel[0] - lastVel[0]) / 2;
+
+            lastAcc[0] = thisAcc[0];
+            lastAcc[1] = thisAcc[1];
+            lastAcc[2] = thisAcc[2];
+            lastVel[0] = thisVel[0];
+            lastVel[1] = thisVel[1];
+            lastVel[2] = thisVel[2];
+            lastPos[0] = thisPos[0];
+            lastPos[1] = thisPos[1];
+            lastPos[2] = thisPos[2];
+
+            if (thisAcc[0] == 0) {
+                count++;
+            } else {
+                count = 0;
+            }
+            if (count >= 25) {
+                thisVel[0] = 0;
+                lastVel[0] = 0;
+                count = 0;
+            }
+            */
+
+            //thisAcc[0] = (-sensorEvent.values[1]-thisAcc[0])/2;
+            thisAcc[0] = -sensorEvent.values[1];
+            if(thisAcc[0] < 0.2 && thisAcc[0] > -0.2) thisAcc[0] = 0;
+            thisVel[0] = lastVel[0] + thisAcc[0]*0.005;
+            //if(thisVel[0] < 0.05 && thisVel[0] > -0.05) thisVel[0] = 0;
+            thisPos[0] = lastPos[0] + thisVel[0] + 0.5*thisAcc[0]*0.005*0.005;
+            lastVel[0] = thisVel[0];
+            lastPos[0] = thisPos[0];
+
+            Log.i("DeltaT","Dt"+deltaT);
+            Log.i("X-axis data", "acc "+thisAcc[0]+" vel "+thisVel[0]+" pos "+thisPos[0]);
+            //Log.i("Accelerometer","x "+lastAcc[0]+" pos "+thisPos[0]+" y "+lastAcc[1]+" z "+lastAcc[2]);
         }
         @Override
         public void onAccuracyChanged(Sensor sensor, int i) {
@@ -473,6 +539,15 @@ public class KalmanEstimatorService extends Service {
         @Override
         public void onAccuracyChanged(Sensor sensor, int i) {
 
+        }
+    };
+
+    private BroadcastReceiver GPSReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            Bundle b = intent.getExtras();
+            UTMPos = b.getDoubleArray("UTMCoordinates");
+            Log.i("UTMTest", "N "+UTMPos[0]+" E "+UTMPos[1]+" H "+UTMPos[2]);
         }
     };
 

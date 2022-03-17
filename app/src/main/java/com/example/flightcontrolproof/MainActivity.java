@@ -8,7 +8,9 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.hardware.Sensor;
+import android.net.wifi.WifiManager;
 import android.os.Bundle;
+import android.text.format.Formatter;
 import android.util.Log;
 import android.view.View;
 import android.view.Window;
@@ -20,6 +22,7 @@ import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
+import com.google.android.gms.common.SignInButton;
 
 import java.util.ArrayList;
 
@@ -32,7 +35,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private Button mButton5;
     private Button mButton6;
     private Button mButton7;
+    private Button mButton8;
+    private Button mButton9;
     private TextView mTextView;
+    private TextView ipTextview;
+
+    WifiManager mWifimanager;
 
     Intent GPSIntent;
 
@@ -50,6 +58,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         set_layout();
         setContentView(R.layout.activity_main);
         mTextView = findViewById(R.id.heading);
+        ipTextview = findViewById(R.id.IPtextview);
+
         set_button_layout();
         mButton1.setOnClickListener(this);
         mButton2.setOnClickListener(this);
@@ -58,7 +68,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         mButton5.setOnClickListener(this);
         mButton6.setOnClickListener(this);
         mButton7.setOnClickListener(this);
+        mButton8.setOnClickListener(this);
+        mButton9.setOnClickListener(this);
 
+        //Get wifi info
+        mWifimanager = (WifiManager) this.getApplicationContext().getSystemService(this.WIFI_SERVICE);
+        String IP = Formatter.formatIpAddress(mWifimanager.getConnectionInfo().getIpAddress());
+        ipTextview.setText(IP);
     }
 
     @Override
@@ -77,7 +93,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         this.requestWindowFeature(Window.FEATURE_NO_TITLE);
         getSupportActionBar().hide(); //Shows the app actionbar "name"
         this.getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN);
-
     }
     protected void set_button_layout(){
         ArrayList<Integer> size = new ArrayList<Integer>();
@@ -89,6 +104,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         mButton5 = (Button) findViewById(R.id.button5);
         mButton6 = (Button) findViewById(R.id.button6);
         mButton7 = (Button) findViewById(R.id.button7);
+        mButton8 = (Button) findViewById(R.id.button8);
+        mButton9 = (Button) findViewById(R.id.button9);
         mButton1.setWidth(buttonSize);
         mButton2.setWidth(buttonSize);
         mButton3.setWidth(buttonSize);
@@ -96,6 +113,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         mButton5.setWidth(buttonSize);
         mButton6.setWidth(buttonSize);
         mButton7.setWidth(buttonSize);
+        mButton8.setWidth(buttonSize);
+        mButton9.setWidth(buttonSize);
     }
     @Override
     public void onClick(View v){
@@ -129,6 +148,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 Intent intent7 = new Intent(this,WifiCommunicationClient.class);
                 startActivity(intent7);
                 break;
+            case R.id.button8:
+                Intent intent8 = new Intent(this, SensorTestActivity.class);
+                startActivity(intent8);
+                break;
+            case R.id.button9:
+                Intent intent9 = new Intent(this, GameControl.class);
+                startActivity(intent9);
             default:
                 break;
         }

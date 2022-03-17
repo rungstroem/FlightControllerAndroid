@@ -10,13 +10,40 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:gravity="center">
-        <TextView
+        android:gravity="center_horizontal"
+        android:layout_marginTop="50dp">
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Input Flight controller IP" />
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <EditText
+                android:layout_width="200dp"
+                android:layout_height="wrap_content"
+                android:id="@+id/inputIP"
+                android:background="@drawable/edittext_style"
+                android:padding="5dp"
+                android:inputType="number|numberDecimal"
+                android:digits="0123456789."
+                android:hint="10.126.128.58"/>
+            <Button
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/inputIPOKButton"
+                android:layout_marginLeft="20dp"
+                android:text="Enter"/>
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
             android:id="@+id/ConnectionStatus"
-            android:text="No connection"/>
-        <!-- This slider is for the motor test -->
+            android:text="No connection"
+            android:layout_marginTop="100dp"/>
+
         <SeekBar
             android:layout_width="255dp"
             android:layout_height="32dp"

@@ -4,7 +4,13 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.Context;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.util.Log;
+import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -23,7 +29,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.UnknownHostException;
 
-public class WifiCommunicationClient extends AppCompatActivity {
+public class WifiCommunicationClient extends AppCompatActivity implements View.OnClickListener{
 
     Thread wifiClientThread;
     volatile boolean threadInterrupt = false;
@@ -36,26 +42,40 @@ public class WifiCommunicationClient extends AppCompatActivity {
 
     private int PWM = 0;
 
+    public String dataBuffer;
+
     SeekBar mSeekBar;
     TextView comStatus;
+    EditText ipInput;
+    Button inputIPOKButton;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        set_layout();
         setContentView(R.layout.activity_wifi_communication_client);
 
         //Create client thread
-        wifiClientThread = new Thread(client);
-        wifiClientThread.start();
+        //wifiClientThread = new Thread(client);
+        //wifiClientThread.start();
 
         mSeekBar = findViewById(R.id.ThrotteCommand);
         mSeekBar.setOnSeekBarChangeListener(seekBarChangeListener);
         comStatus = findViewById(R.id.ConnectionStatus);
+        ipInput = findViewById(R.id.inputIP);
+        inputIPOKButton = findViewById(R.id.inputIPOKButton);
+        inputIPOKButton.setOnClickListener(this);
+
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
         threadInterrupt = true;
+    }
+    protected void set_layout(){
+        this.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        getSupportActionBar().hide(); //Shows the app actionbar "name"
+        this.getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN);
     }
 
     SeekBar.OnSeekBarChangeListener seekBarChangeListener = new SeekBar.OnSeekBarChangeListener() {
@@ -127,4 +147,20 @@ public class WifiCommunicationClient extends AppCompatActivity {
             return;
         }
     };
+
+    @Override
+    public void onClick(View v) {
+        switch (v.getId()) {
+            case R.id.inputIPOKButton:
+                if (!TextUtils.isEmpty(ipInput.getText().toString())) {
+                    Toast.makeText(getApplicationContext(), "Wifi client started", Toast.LENGTH_SHORT).show();
+                    serverIP = ipInput.getText().toString();
+                    wifiClientThread = new Thread(client);
+                    wifiClientThread.start();
+                } else{
+                    Toast.makeText(getApplicationContext(), "Input flight controller IP",Toast.LENGTH_LONG).show();
+                }
+                break;
+        }
+    }
 }

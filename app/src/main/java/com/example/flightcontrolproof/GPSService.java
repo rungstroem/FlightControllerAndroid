@@ -33,6 +33,11 @@ public class GPSService extends Service {
     LocationManager mLocationManager;
     HandlerThread GPSHandlerThread;
     Looper GPSLooper;
+
+    double[] UTMPosition = new double[3];
+    double[] UTMTemp = new double[2];
+    UTMConverterClass UTMconv;
+
     public GPSService() {
     }
     @Override
@@ -42,11 +47,11 @@ public class GPSService extends Service {
     @Override
     public void onCreate(){
         GPSHandlerThread = new HandlerThread("GPS handler thread");
+        UTMconv = new UTMConverterClass();
     }
     @SuppressLint("MissingPermission")
     @Override
     public int onStartCommand(Intent intent, int flags, int startID){
-        Log.i("GPSUpdateService", "GPS service started");
         GPSHandlerThread.start();
         GPSLooper = GPSHandlerThread.getLooper();
         mLocationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
@@ -64,16 +69,23 @@ public class GPSService extends Service {
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
     }
 
+    public void sendUTMtoActivity(Location location){
+        UTMTemp = UTMconv.getUTM(location.getLatitude(),location.getLongitude());
+        UTMPosition[0] = UTMTemp[0]; UTMPosition[1] = UTMTemp[1]; UTMPosition[2] = location.getAltitude();
+        Intent intent = new Intent("GPSLocationUpdate");
+        intent.putExtra("UTMCoordinates", UTMPosition);
+    }
+
     public final LocationListener GPSListener = new LocationListener() {
         @Override
         public void onLocationChanged(@NonNull Location location) {
             Log.i("GPSUpdateService","Lat "+location.getLatitude()+" Lon "+location.getLongitude()+" Alt "+location.getAltitude());
-            sendDataToActivity(location);
+            //sendDataToActivity(location);
+            sendUTMtoActivity(location);
         }
     };
 
     public void onDestroy(){
-        Log.i("GPSUpdateService", "GPS service closed");
         mLocationManager.removeUpdates(GPSListener);
         GPSLooper.quit();
         GPSHandlerThread.quit();
