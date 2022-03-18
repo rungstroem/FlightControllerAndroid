@@ -74,7 +74,6 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
     private double rad2deg = 180/Math.PI;
     volatile boolean threadInterrupt = false;
     private double[] vehicleState = new double[9];  //[Roll Pitch Yaw p q r Px Py Pz]
-    private double[][] waypointList;
 
     PowerManager powerManager;
     PowerManager.WakeLock wakeLock;
@@ -192,11 +191,6 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         pRateController = new PIDController(qRateKp,qRateKi,qRateKd);
         pRateController.setSaturation(35,-35);
 
-        //Test data
-        waypointList = new double[2][2];
-        waypointList[0][0] = 2; waypointList[0][1] = 3;
-        waypointList[1][0] = 4; waypointList[1][1] = 8;
-
         //Start threads
         controllerThread = new Thread(controller);
         controllerThread.start();
@@ -216,7 +210,7 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         stopService(KalmanIntent);
         stopService(GuidanceIntent);
         stopService(WifiIntent);
-        stopService(GPSIntent);   //Wifi and LocationManager doesn't work simultaniously
+        stopService(GPSIntent);
 
         threadInterrupt = true;
         serialconnection.finalize();
@@ -549,27 +543,6 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         }
     };*/
 
-
-    // This is a thread for sending serial data. It waits 50mS between sending commands. Use this if the µC cannot keep up
-        /*Thread sendData = new Thread(new Runnable() {
-        @Override
-        public void run() {
-            byte[] data = new byte[2];
-            data[0] = 0x03;
-            int i = 0;
-            while(true){
-                //data[1] = (byte) ((int)(dElevator+30) & 0xFF);
-                //serialconnection.tx_data(data[i]);
-                i++;
-                i %= 2;
-                try {
-                    Thread.sleep(50);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-    });*/
 
 
    // This is a thread for a simple guidance method. It calculates the difference between the Yaw angle and the angle towards the waypoint

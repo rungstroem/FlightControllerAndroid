@@ -36,7 +36,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private Button mButton6;
     private Button mButton7;
     private Button mButton8;
-    private Button mButton9;
     private TextView mTextView;
     private TextView ipTextview;
 
@@ -69,7 +68,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         mButton6.setOnClickListener(this);
         mButton7.setOnClickListener(this);
         mButton8.setOnClickListener(this);
-        mButton9.setOnClickListener(this);
 
         //Get wifi info
         mWifimanager = (WifiManager) this.getApplicationContext().getSystemService(this.WIFI_SERVICE);
@@ -105,7 +103,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         mButton6 = (Button) findViewById(R.id.button6);
         mButton7 = (Button) findViewById(R.id.button7);
         mButton8 = (Button) findViewById(R.id.button8);
-        mButton9 = (Button) findViewById(R.id.button9);
         mButton1.setWidth(buttonSize);
         mButton2.setWidth(buttonSize);
         mButton3.setWidth(buttonSize);
@@ -114,7 +111,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         mButton6.setWidth(buttonSize);
         mButton7.setWidth(buttonSize);
         mButton8.setWidth(buttonSize);
-        mButton9.setWidth(buttonSize);
     }
     @Override
     public void onClick(View v){
@@ -149,12 +145,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 startActivity(intent7);
                 break;
             case R.id.button8:
-                Intent intent8 = new Intent(this, SensorTestActivity.class);
+                Intent intent8 = new Intent(this, GameControl.class);
                 startActivity(intent8);
                 break;
-            case R.id.button9:
-                Intent intent9 = new Intent(this, GameControl.class);
-                startActivity(intent9);
             default:
                 break;
         }

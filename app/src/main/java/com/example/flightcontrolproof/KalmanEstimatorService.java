@@ -53,6 +53,7 @@ public class KalmanEstimatorService extends Service {
 
 
     double[] euler = new double[9];
+    double[] vehicleState = new double[9];
     double[] UTMPos = new double[3];
     double uDot;
     double vDot;
@@ -109,7 +110,7 @@ public class KalmanEstimatorService extends Service {
         lastVel[0] = 0; lastVel[1] = 0; lastVel[2] = 0;
         lastPos[0] = 0; lastPos[1] = 0; lastPos[2] = 0;
 
-        //Start Kalman filter thread
+        //Start complementary filter thread
         filterThread = new Thread(complementaryFilterAttitude);
     }
 
@@ -121,12 +122,12 @@ public class KalmanEstimatorService extends Service {
         sensorThreadHandler = new Handler(sensorThreadLooper);
 
         //Sensor listeners
-        mSensorManager.registerListener(accListener, accelerometer, 5000, sensorThreadHandler);     //5000µS is 200Hz
+        //mSensorManager.registerListener(accListener, accelerometer, 5000, sensorThreadHandler);     //5000µS is 200Hz
         mSensorManager.registerListener(gravityListener, gravity, 5000, sensorThreadHandler);
         mSensorManager.registerListener(gyroListener, gyroscope, 5000, sensorThreadHandler);
         mSensorManager.registerListener(presListener, pressure, 5000, sensorThreadHandler);
         mSensorManager.registerListener(magListener, magnetometer,5000, sensorThreadHandler);
-        mSensorManager.registerListener(orientListener, orientation, 5000, sensorThreadHandler);    //Only on older phones
+        //mSensorManager.registerListener(orientListener, orientation, 5000, sensorThreadHandler);    //Only on older phones
         //mSensorManager.registerListener(rotListener, rotation, 5000, sensorThreadHandler);    //Only on newer phones
 
         //Kalman filter thread initialization
@@ -141,12 +142,12 @@ public class KalmanEstimatorService extends Service {
         sensorHandlerThread.quit(); //Stops the sensor thread
         threadInterrupt = true;
 
-        mSensorManager.unregisterListener(accListener);
+        //mSensorManager.unregisterListener(accListener);
         mSensorManager.unregisterListener(presListener);
         mSensorManager.unregisterListener(gravityListener);
         mSensorManager.unregisterListener(gyroListener);
         mSensorManager.unregisterListener(magListener);
-        mSensorManager.unregisterListener(orientListener);
+        //mSensorManager.unregisterListener(orientListener);
         //mSensorManager.unregisterListener(rotListener);
         Log.i("SystemState","Kalman Service stopped");
     }
@@ -199,7 +200,12 @@ public class KalmanEstimatorService extends Service {
                 estAngles[1] = (1 - K) * estAngles[1] + K * accAngles[1];
                 estAngles[2] = (1 - K) * estAngles[2] + K * accAngles[2];
 
+                vehicleState[0] = estAngles[0]; vehicleState[1] = estAngles[1]; vehicleState[2] = estAngles[2];     //Euler angles for stability controllers
+                vehicleState[3] = p;            vehicleState[4] = q;            vehicleState[5] = r;                //Gyro rates for damper controllers
+
+                sendDataToActivity(vehicleState);
                 Log.i("ComplementaryFilter", "R " + estAngles[0] + " P " + estAngles[1] + " Y " + estAngles[2]);
+
                 //Loop thread every 5mS - 200Hz
                 try {
                     Thread.sleep(5);
@@ -504,7 +510,6 @@ public class KalmanEstimatorService extends Service {
         }
     };
 
-    double axisX, axisY, axisZ;
     double[] lastRates = new double[3];
     double gyroFilterConst = 4;
     SensorEventListener gyroListener = new SensorEventListener() {
@@ -513,18 +518,13 @@ public class KalmanEstimatorService extends Service {
             p = sensorEvent.values[1]*rad2deg;  //X-axis
             q = sensorEvent.values[0]*rad2deg;  //Y-axis
             r = sensorEvent.values[2]*rad2deg;  //Z-axis
-            //p = axisX;
-            //q = axisY;
-            //r = axisZ;
-            //euler[3] = axisX*rad2deg;
-            //euler[4] = axisY*rad2deg;
-            //euler[5] = axisZ*rad2deg;
-            lastRates[0] += (p-lastRates[0])/gyroFilterConst;
-            lastRates[1] += (q-lastRates[1])/gyroFilterConst;
-            lastRates[2] += (r-lastRates[2])/gyroFilterConst;
-            euler[3] = lastRates[0];
-            euler[4] = lastRates[1];
-            euler[5] = lastRates[2];
+
+            //lastRates[0] += (p-lastRates[0])/gyroFilterConst;
+            //lastRates[1] += (q-lastRates[1])/gyroFilterConst;
+            //lastRates[2] += (r-lastRates[2])/gyroFilterConst;
+            //euler[3] = lastRates[0];
+            //euler[4] = lastRates[1];
+            //euler[5] = lastRates[2];
         }
 
         @Override
@@ -543,9 +543,9 @@ public class KalmanEstimatorService extends Service {
             mNorth = sensorEvent.values[1];
             mEast = sensorEvent.values[0];
             accY = Math.atan2(mEast,mNorth)*rad2deg;    //atan2(East, North) - atan2(S.values[1],S.values[0])
-            lastAccY += (accY-lastAccY)/magFilterConst;
-            euler[2] = lastAccY;
-            Log.i("Magnetometer","Magnetometer generated Yaw "+accY+" Filtered "+lastAccY);
+            //lastAccY += (accY-lastAccY)/magFilterConst;
+            //euler[2] = lastAccY;
+            //Log.i("Magnetometer","Magnetometer generated Yaw "+accY+" Filtered "+lastAccY);
         }
 
         @Override
@@ -565,7 +565,8 @@ public class KalmanEstimatorService extends Service {
         public void onSensorChanged(SensorEvent sensorEvent) {
             h = -Math.log(sensorEvent.values[0]/groundlevelPresure) * ((R*ambientTemperature)/(-M*g));
             altitude += (h-altitude)/pressFilterConst;
-            euler[8] = altitude;
+            //euler[8] = altitude;
+            vehicleState[8] = altitude;
             Log.i("Pressure","mBar "+sensorEvent.values[0]+" height "+altitude);
         }
 
@@ -579,10 +580,10 @@ public class KalmanEstimatorService extends Service {
         @Override
         public void onSensorChanged(SensorEvent sensorEvent) {
             //Uses taylt-brian angles "z,y,x"
-            euler[0] = sensorEvent.values[2];
-            euler[1] = sensorEvent.values[1];
+            //euler[0] = sensorEvent.values[2];
+            //euler[1] = sensorEvent.values[1];
             //euler[2] = sensorEvent.values[0];   //Sensor event 0 is yaw "azimut"
-            sendDataToActivity(euler);
+            //sendDataToActivity(euler);
         }
 
         @Override
@@ -596,6 +597,8 @@ public class KalmanEstimatorService extends Service {
         public void onReceive(Context context, Intent intent) {
             Bundle b = intent.getExtras();
             UTMPos = b.getDoubleArray("UTMCoordinates");
+
+            vehicleState[6] = UTMPos[0];    vehicleState[7] = UTMPos[1];
             Log.i("UTMTest", "N "+UTMPos[0]+" E "+UTMPos[1]+" H "+UTMPos[2]);
         }
     };

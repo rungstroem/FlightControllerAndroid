@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Flight Controller</string>
+    <string name="app_name">Freedom FC</string>
     <string name="button1">Route planning</string>
     <string name="button2">Motor test</string>
     <string name="button3">Autopilot</string>
@@ -7,8 +7,7 @@
     <string name="button5">USB devices</string>
     <string name="button6">Sensors</string>
     <string name="button7">Wifi Client</string>
-    <string name="button8">SensorTest</string>
-    <string name="button9">GameController</string>
+    <string name="button8">GameController</string>
     <string name="title_activity_maps">MapsActivity</string>
     <string name="RouteFinish">Route finished</string>
     <string name="DeletePoint">Clear map</string>

@@ -11,6 +11,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationListener;
@@ -52,14 +53,14 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     ArrayList<LatLng> waypoints;
     Button mButton1;
     Button mButton2;
-    Location startLocation = null;
-    Context mContext;
+
+    SharedPreferences mSharedPref;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        //Register location receiver
-        //LocalBroadcastManager.getInstance(this).registerReceiver(mLocationReceiver, new IntentFilter("GPSLocationUpdates"));
+
+        mSharedPref = this.getSharedPreferences("WaypointList",this.MODE_PRIVATE);
 
         //Create waypoint list for waypoint navigation
         waypoints = new ArrayList<LatLng>();
@@ -75,29 +76,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
     }
-
-    /*private BroadcastReceiver mLocationReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            Bundle b = intent.getBundleExtra("Location");
-            Log.i("LocationReceiver", "Maps activity received location update");
-            startLocation = (Location) b.getParcelable("Location");
-        }
-    };
-
-    @Override
-    protected void onStart(){
-        super.onStart();
-        if(startLocation == null){
-            //Wait for startLocation update
-        }
-    }
-
-    @Override
-    protected void onPause(){
-        super.onPause();
-        unregisterReceiver(mLocationReceiver);
-    }*/
 
     protected void set_layout() {
         this.requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -116,7 +94,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 curLat = location.getLatitude();
                 curLon = location.getLongitude();
                 curAlt = location.getAltitude();
-                Log.v("LOCATIONNNN", "I should have updated the current lat and lon");  //This is never executed...
             }
         });
         Location location = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
@@ -135,8 +112,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     @Override
     public void onMapReady(GoogleMap googleMap) {
         LatLng initLatLon = new LatLng(curLat, curLon);
-        //LatLng initLatLon = new LatLng(startLocation.getLatitude(), startLocation.getLongitude());
-        waypoints.add(initLatLon);
+        //waypoints.add(initLatLon);
         mMap = googleMap;
         mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(initLatLon.latitude, initLatLon.longitude), zoomLevel));
         if (mMap != null) {
@@ -157,20 +133,23 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         mButton1.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Intent intent1 = new Intent(MapsActivity.this, controlActivity.class);
-                intent1.putExtra("waypointList", waypoints); // - Transfer data to new activity
-                startActivity(intent1);
+                SharedPreferences.Editor editor = mSharedPref.edit();
+                // !!! You ended here kenneth !!!
+
+
+                //Intent intent1 = new Intent(MapsActivity.this, controlActivity.class);
+                //intent1.putExtra("waypointList", waypoints); // - Transfer data to new activity
+                //startActivity(intent1);
             }
         });
         mButton2.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                //Only clears map for now...
                 waypointNR=0;
                 waypoints.clear();
                 mMap.clear();
                 mMap.addMarker(new MarkerOptions().position(initLatLon).title("Current location"+" Lat: "+initLatLon.latitude+" Lon: "+initLatLon.longitude));
-                waypoints.add(initLatLon);
+                //waypoints.add(initLatLon);
             }
         });
     }

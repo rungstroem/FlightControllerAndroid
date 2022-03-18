@@ -88,12 +88,6 @@
                     android:text="@string/button8"
                     android:id="@+id/button8"
                     android:layout_margin="10dp"/>
-                <Button
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/button9"
-                    android:id="@+id/button9"
-                    android:layout_margin="10dp"/>
             </LinearLayout>
         </ScrollView>
     </LinearLayout>

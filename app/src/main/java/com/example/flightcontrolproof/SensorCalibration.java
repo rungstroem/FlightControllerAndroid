@@ -37,7 +37,6 @@ public class SensorCalibration extends AppCompatActivity implements View.OnClick
     double tempSamples = 0;
 
     SharedPreferences mSharedPref;
-    SharedPreferences.Editor editor;
 
     Button mPressureCalibrationButton;
     Button mAccelerometerCalibrationButton;

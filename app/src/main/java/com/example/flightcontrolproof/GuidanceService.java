@@ -26,7 +26,7 @@ public class GuidanceService extends Service {
 
     double[][] waypointList;
     double[] vehicleState = new double[9];  //[Roll Pitch Yaw p q r Px Py Pz]
-    double altitudeSP;
+    double altitudeSP = 3; //Just a fixed 3m altitude
 
 
 
@@ -104,7 +104,6 @@ public class GuidanceService extends Service {
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
     }
 
-    double setPoint;
     private Runnable guidanceCC = new Runnable() {
         @Override
         public void run() {
@@ -133,7 +132,7 @@ public class GuidanceService extends Service {
                 crossTrackErrorAngle = Math.asin(distance*Math.sin(LOSangle-UAVangle)/pLOS)*rad2deg;
                 heading = crossTrackErrorAngle+LOSangle;
                 missDistance = Math.sqrt(Math.pow(waypointList[waypointPointer+1][0]-UAVx,2)+Math.pow(waypointList[waypointPointer+1][1]-UAVy,2));
-                setPoint = k*(heading-UAVyaw);  //Can also include air speed Va - setPoint=k*(heading-UAVyaw)*Va
+                RollCommand = k*(heading-UAVyaw);  //Can also include air speed Va - setPoint=k*(heading-UAVyaw)*Va
 
                 //Change to next waypoint
                 if(missDistance < rAcceptance){
@@ -141,7 +140,7 @@ public class GuidanceService extends Service {
                     if(waypointList.length -1 < waypointPointer) waypointPointer = waypointList.length-1;
                 }
 
-                Log.i("Guidance","LOS angle "+LOSangle+" UAV angle "+UAVangle+" Roll setpoint "+setPoint+" Yaw "+vehicleState[2]);
+                Log.i("Guidance","LOS angle "+LOSangle+" UAV angle "+UAVangle+" Roll setpoint "+RollCommand+" Yaw "+vehicleState[2]);
 
                 //Loop the thread - 5Hz
                 try {
@@ -183,12 +182,14 @@ public class GuidanceService extends Service {
                 //Change to next waypoint
                 if (missDistance < rAcceptance) {
                     waypointPointer++;
-                    if (waypointList.length - 1 < waypointPointer)
-                        waypointPointer = waypointList.length - 1;
+                    if (waypointList.length - 1 < waypointPointer) {
+                        //waypointPointer = waypointList.length - 1;
+                        waypointPointer = 0;    //This is just to see if the plane can circle around waypoints
+                    }
                 }
 
                 sendDataToActivity(RollCommand, "GuidanceUpdate");
-                Log.i("Guidance", "LOS angle " + LOSangle + " UAV angle " + UAVangle + " Roll setpoint " + setPoint + " Yaw " + vehicleState[2]);
+                Log.i("Guidance", "LOS angle " + LOSangle + " UAV angle " + UAVangle + " Roll setpoint " + RollCommand + " Yaw " + vehicleState[2]);
 
                 //Loop the thread - 5Hz
                 try {
@@ -243,9 +244,9 @@ public class GuidanceService extends Service {
 
                 Log.i("Guidance","Altitude "+vehicleState[8]+" setpoint "+pitchCommand);
                 sendDataToActivity(pitchCommand, "AltitudeGuidanceUpdate");
-                //Loop the thread - 10Hz
+                //Loop the thread - 5Hz
                 try {
-                    Thread.sleep(100);
+                    Thread.sleep(200);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }

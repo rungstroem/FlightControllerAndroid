@@ -57,8 +57,9 @@ public class MotorTestActivity extends AppCompatActivity {
 
         @Override
         public void onStopTrackingTouch(SeekBar seekBar) {
-            byte[] test = new byte[1];
-            test[0] = (byte) (PWM & 0XFF);
+            byte[] test = new byte[2];
+            test[0] = (byte) 0xFF;
+            test[1] = (byte) (PWM & 0xFF);
             tx_data(test);
         }
     };
