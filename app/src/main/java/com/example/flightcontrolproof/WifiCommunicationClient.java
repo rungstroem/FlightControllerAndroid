@@ -54,10 +54,6 @@ public class WifiCommunicationClient extends AppCompatActivity implements View.O
         set_layout();
         setContentView(R.layout.activity_wifi_communication_client);
 
-        //Create client thread
-        //wifiClientThread = new Thread(client);
-        //wifiClientThread.start();
-
         mSeekBar = findViewById(R.id.ThrotteCommand);
         mSeekBar.setOnSeekBarChangeListener(seekBarChangeListener);
         comStatus = findViewById(R.id.ConnectionStatus);
@@ -91,6 +87,7 @@ public class WifiCommunicationClient extends AppCompatActivity implements View.O
 
         @Override
         public void onStopTrackingTouch(SeekBar seekBar) {
+            dataBuffer = "t"+(char)((PWM)&0xFF)+"x";
             newData = true;
         }
     };
@@ -113,7 +110,7 @@ public class WifiCommunicationClient extends AppCompatActivity implements View.O
                         if (newData) {
                             Log.i("Wifi","Trying to send data");
                             try {
-                                dataOut.write(PWM);
+                                dataOut.writeBytes(dataBuffer);
                                 dataOut.flush();
                                 newData = false;
                             }catch (IOException io){

@@ -47,9 +47,9 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
     Button pDampOKButtonInput;
     Button qDampOKButtonInput;
 
-    private double pitchKp = 2;
+    private double pitchKp = 2.5;
     private double pitchKi = 0.3;
-    private double pitchKd = 0.5;
+    private double pitchKd = 0.2;
 
     private double rollKp = 2;
     private double rollKi = 0.5;
@@ -97,7 +97,7 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
     PIDController pRateController;
 
     double RollSetpoint = 0;
-    double PitchSetpoint = 0;
+    double PitchSetpoint = -10;
     int throttleSetpoint = 0;
 
     @Override
@@ -306,7 +306,6 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
             Log.i("SystemState","Controller thread started");
             //Aileon    -   Elevator    -   Aileon      -       Elevator
             Mixing[0][0] = 1;   Mixing[0][1] = -1;  Mixing[1][0] = -1;  Mixing[1][1] = -1;
-            //sendData.start();
             while(!threadInterrupt){
                 //Speed controller here
                 AE[0] = rollController.control(RollSetpoint,steadyZone(RollSetpoint,vehicleState[0],1),0.03);     //dAileron

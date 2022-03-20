@@ -74,6 +74,7 @@ public class GPSService extends Service {
         UTMPosition[0] = UTMTemp[0]; UTMPosition[1] = UTMTemp[1]; UTMPosition[2] = location.getAltitude();
         Intent intent = new Intent("GPSLocationUpdate");
         intent.putExtra("UTMCoordinates", UTMPosition);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
     }
 
     public final LocationListener GPSListener = new LocationListener() {

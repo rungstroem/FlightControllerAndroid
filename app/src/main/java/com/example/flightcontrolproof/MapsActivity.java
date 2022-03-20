@@ -60,7 +60,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        mSharedPref = this.getSharedPreferences("WaypointList",this.MODE_PRIVATE);
+        //mSharedPref = this.getSharedPreferences("WaypointList",this.MODE_PRIVATE);
 
         //Create waypoint list for waypoint navigation
         waypoints = new ArrayList<LatLng>();
@@ -75,6 +75,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
     }
 
     protected void set_layout() {
@@ -94,6 +99,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 curLat = location.getLatitude();
                 curLon = location.getLongitude();
                 curAlt = location.getAltitude();
+                mLocationManager.removeUpdates(this);
+                mLocationManager = null;
             }
         });
         Location location = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
