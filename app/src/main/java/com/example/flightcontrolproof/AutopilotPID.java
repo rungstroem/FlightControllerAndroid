@@ -172,7 +172,7 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         startService(GPSIntent);
 
         //Register receiver for Kalman data
-        LocalBroadcastManager.getInstance(this).registerReceiver(KalmanReceiver, new IntentFilter("KalmanUpdate"));
+        LocalBroadcastManager.getInstance(this).registerReceiver(attitudeReceiver, new IntentFilter("attitudeUpdate"));
         //Register receivers for Guidance data
         LocalBroadcastManager.getInstance(this).registerReceiver(altitudeReceiver, new IntentFilter("AltitudeGuidanceUpdate"));
         LocalBroadcastManager.getInstance(this).registerReceiver(guidanceReceiver, new IntentFilter("GuidanceUpdate"));
@@ -218,12 +218,12 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         Log.i("SystemState","Autopilot shutting down");
     }
 
-    private BroadcastReceiver KalmanReceiver = new BroadcastReceiver() {
+    private BroadcastReceiver attitudeReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             Bundle b = intent.getExtras();
             vehicleState = b.getDoubleArray("stateVector");
-            Log.i("Kalman","Roll "+vehicleState[0]+" Pitch "+vehicleState[1]+" Yaw "+vehicleState[2]+" p "+vehicleState[3]+" q "+vehicleState[4]+" r "+vehicleState[5]);
+            Log.i("Attitude","Roll "+vehicleState[0]+" Pitch "+vehicleState[1]+" Yaw "+vehicleState[2]+" p "+vehicleState[3]+" q "+vehicleState[4]+" r "+vehicleState[5]);
         }
     };
 

@@ -27,8 +27,7 @@ import android.util.Log;
 
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
-import java.util.List;
-import java.util.Timer;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class KalmanEstimatorService extends Service {
     SensorManager mSensorManager;
@@ -49,13 +48,18 @@ public class KalmanEstimatorService extends Service {
     double rad2deg = 180.0/PI;
 
     volatile boolean threadInterrupt = false;
-    Thread filterThread;
+    Thread complementaryThread;
+    Thread kalmanThread;
     LinearAlgebra LA;
 
 
     double[] euler = new double[9];
     double[] vehicleState = new double[9];
     double[] UTMPos = new double[3];
+    double[] vel_N = {0,0,0};
+    volatile boolean newGPSData = false;
+    ReentrantLock mutex;
+
     double uDot;
     double vDot;
     double wDot;
@@ -81,6 +85,9 @@ public class KalmanEstimatorService extends Service {
     @Override
     public void onCreate(){
         super.onCreate();
+        //Instantiate mutex lock
+        mutex = new ReentrantLock();
+
         //Sensor thread create
         sensorHandlerThread = new HandlerThread("Sensor handler thread");
 
@@ -104,8 +111,9 @@ public class KalmanEstimatorService extends Service {
         groundlevelPresure = getPreference(mSharedPref, "BarometerCalibration", 1025);
         ambientTemperature = getPreference(mSharedPref, "AmbientTemperature", 20) + 273.15;     //Temp in degrees C + 273.15K
 
-        //Start complementary filter thread
-        filterThread = new Thread(complementaryFilterAttitude);
+        //Filter threads initialization
+        complementaryThread = new Thread(complementaryFilterAttitude);
+        kalmanThread = new Thread(KalmanFilter);
     }
 
     @Override
@@ -116,7 +124,7 @@ public class KalmanEstimatorService extends Service {
         sensorThreadHandler = new Handler(sensorThreadLooper);
 
         //Sensor listeners
-        //mSensorManager.registerListener(accListener, accelerometer, 5000, sensorThreadHandler);     //5000µS is 200Hz
+        mSensorManager.registerListener(accListener, accelerometer, 5000, sensorThreadHandler);     //5000µS is 200Hz
         mSensorManager.registerListener(gravityListener, gravity, 5000, sensorThreadHandler);
         mSensorManager.registerListener(gyroListener, gyroscope, 5000, sensorThreadHandler);
         mSensorManager.registerListener(presListener, pressure, 5000, sensorThreadHandler);
@@ -124,8 +132,9 @@ public class KalmanEstimatorService extends Service {
         mSensorManager.registerListener(orientListener, orientation, 5000, sensorThreadHandler);    //Only on older phones
         //mSensorManager.registerListener(rotListener, rotation, 5000, sensorThreadHandler);    //Only on newer phones
 
-        //Kalman filter thread initialization
-        filterThread.start();
+        //Filter threads start
+        complementaryThread.start();
+        //kalmanThread.start();
 
         Log.i("SystemState","Kalman service started");
 
@@ -136,7 +145,7 @@ public class KalmanEstimatorService extends Service {
         sensorHandlerThread.quit(); //Stops the sensor thread
         threadInterrupt = true;
 
-        //mSensorManager.unregisterListener(accListener);
+        mSensorManager.unregisterListener(accListener);
         mSensorManager.unregisterListener(presListener);
         mSensorManager.unregisterListener(gravityListener);
         mSensorManager.unregisterListener(gyroListener);
@@ -153,7 +162,7 @@ public class KalmanEstimatorService extends Service {
     }
 
     public void sendDataToActivity(double[] stateVector){
-        Intent intent = new Intent("KalmanUpdate");
+        Intent intent = new Intent("attitudeUpdate");
         intent.putExtra("stateVector", stateVector);
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
     }
@@ -198,7 +207,78 @@ public class KalmanEstimatorService extends Service {
                 vehicleState[3] = p;            vehicleState[4] = q;            vehicleState[5] = r;                //Gyro rates for damper controllers
 
                 sendDataToActivity(vehicleState);
-                Log.i("ComplementaryFilter", "R " + estAngles[0] + " P " + estAngles[1] + " Y " + estAngles[2]);
+                //Log.i("ComplementaryFilter", "R " + estAngles[0] + " P " + estAngles[1] + " Y " + estAngles[2]);
+                Log.i("ComplementaryFilter", "R " + estAngles[0] + " P " + estAngles[1] + " Y " + estAngles[2]+" accR "+accAngles[0]+" accP "+accAngles[1]+" accY "+accAngles[2]+" gyroP "+p+" gyroQ "+q+" gyroR "+r);
+
+
+                //Loop thread every 5mS - 200Hz
+                try {
+                    Thread.sleep(5);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    };
+
+    private Runnable KalmanFilter = new Runnable() {
+        double[][] R_BN(double R, double P, double Y){
+            double[][] RMat = new double[3][3];
+            RMat[0][0] = cos(Y) * cos(P);   RMat[0][1] = (-sin(Y))*cos(R) + cos(Y)*sin(P)*sin(R);   RMat[0][2] = sin(Y)*sin(R) + cos(Y)*cos(R)*sin(P);
+            RMat[1][0] = sin(Y) * cos(P);   RMat[1][1] = cos(Y)*cos(R) + sin(R)*sin(P)*sin(Y);      RMat[1][2] = (-cos(Y))*sin(R) + sin(P)*sin(Y)*cos(R);
+            RMat[2][0] = (-sin(P));         RMat[2][1] = cos(P)*sin(R);                             RMat[2][2] = cos(P)*cos(R);
+            return RMat;
+        }
+        double dt = 0.05;
+        double[][] RMat;
+        double[] acc_N;
+
+        double[] xm = new double[6];
+        double[] xp = new double[6];
+        double[] gps = new double[6];
+
+        double[][] K;
+        double[][] S;
+        double[][] pm;
+        double[][] pp = {{0.1,0,0,0,0,0},{0,0.1,0,0,0,0},{0,0,0.1,0,0,0},{0,0,0,10,0,0},{0,0,0,0,10,0},{0,0,0,0,0,10}};
+
+        double[][] A = {{1,0,0,dt,0,0},{0,1,0,0,dt,0},{0,0,1,0,0,dt},{0,0,0,1,0,0},{0,0,0,0,1,0},{0,0,0,0,0,1}};
+        double[][] B = {{0.5*dt*dt,0,0},{0,0.5*dt*dt,0},{0,0,0.5*dt*dt},{dt,0,0},{0,dt,0},{0,0,dt}};
+        double[][] H = {{1,0,0,0,0,0},{0,1,0,0,0,0},{0,0,1,0,0,0},{0,0,0,1,0,0},{0,0,0,0,1,0},{0,0,0,0,0,1}};
+        double[][] R = {{0.2,0,0,0,0,0},{0,0.2,0,0,0,0},{0,0,0.2,0,0,0},{0,0,0,0.2,0,0},{0,0,0,0,0.2,0},{0,0,0,0,0,0.2}};
+        double[][] Q = {{0.2,0,0,0,0,0},{0,0.2,0,0,0,0},{0,0,0.2,0,0,0},{0,0,0,0.2,0,0},{0,0,0,0,0.2,0},{0,0,0,0,0,0.2}};
+        double[][] I = {{1,0,0,0,0,0},{0,1,0,0,0,0},{0,0,1,0,0,0},{0,0,0,1,0,0},{0,0,0,0,1,0},{0,0,0,0,0,1}};
+
+        @Override
+        public void run() {
+            xp[0] = UTMPos[0]; xp[1] = UTMPos[1]; xp[2] = UTMPos[2]; xp[3] = vel_N[0]; xp[4] = vel_N[1]; xp[5] = vel_N[2];
+
+            while (!threadInterrupt) {
+                //Transform acceleration
+                RMat = R_BN(estAngles[0], estAngles[1], estAngles[2]);    //Creates the DCM from body to ned
+                acc_N = LA.vectMatMultiply(RMat, acc_B);
+                Log.i("AccN","AccN"+acc_N[0]+" "+acc_N[1]+" "+acc_N[2]);
+
+                //Predict step
+                xm = LA.vectAdd(LA.vectMatMultiply(A,xp),LA.vectMatMultiply(B,acc_N),1);
+                Log.i("XM","XM"+xm[0]+" "+xm[1]+" "+xm[2]+" "+xm[3]+" "+xm[4]+" "+xm[5]);
+                pm = LA.matrixAdd(LA.matrixMultiply(LA.matrixMultiply(A,pp),LA.matrixTranspose(A)), Q);
+
+
+                //Update step
+                if (newGPSData) {
+                    gps[0] = UTMPos[0]; gps[1] = UTMPos[1]; gps[2] = UTMPos[2]; gps[3] = vel_N[0]; gps[4] = vel_N[1]; gps[5] = vel_N[2];
+                    S = LA.matrixAdd(LA.matrixMultiply(LA.matrixMultiply(H,pm),LA.matrixTranspose(H)),R);
+                    K = LA.matrixMultiply(LA.matrixMultiply(pm,LA.matrixTranspose(H)), LA.matrixInverse(S));
+                    xp = LA.vectAdd(xm,LA.vectMatMultiply(K,LA.vectAdd(gps, xm,-1)),1);
+                    pp = LA.matrixSubtract(I,LA.matrixMultiply(K,pm));
+                    try {
+                        mutex.lock();
+                        newGPSData = false;
+                    } finally {
+                        mutex.unlock();
+                    }
+                }
 
                 //Loop thread every 5mS - 200Hz
                 try {
@@ -219,55 +299,79 @@ public class KalmanEstimatorService extends Service {
             return RMat;
         }
         double dt = 0.05;
-        double[][] RMat = new double[3][3];
-        double[] acc_N = new double[3];
-        double[] gpsdata = new double[6];
+        double[][] RMat;
+        double[] acc_N;
 
-        double[][] A = new double[6][6];
-        double[][] B = new double[6][3];
-        double[] xm = new double[6];
-        double[] xp = new double[6];
-        double[][] Pm = new double[6][6];
-        double[][] Pp = new double[6][6];
-        double[][] H = new double[6][6];
-        double[][] Q = new double[6][6];
-        double[][] R = new double[6][6];
-        double[][] K = new double[6][6];
-        double[][] I = {{1,0,0,0,0,0},{0,1,0,0,0,0},{0,0,1,0,0,0},{0,0,0,1,0,0},{0,0,0,0,1,0},{0,0,0,0,0,1}};
+        double[] xm_n = new double[2];
+        double[] xp_n = new double[2];
+        double[] xm_e = new double[2];
+        double[] xp_e = new double[2];
+        double[] gps_n = new double[2];
+        double[] gps_e = new double[2];
+
+        double[][] K_n;
+        double[][] S_n;
+        double[][] pm_n;
+        double[][] pp_n = {{0.1,0},{0,10}};
+        double[][] K_e;
+        double[][] S_e;
+        double[][] pm_e;
+        double[][] pp_e = {{0.1,0},{0,10}};
+
+        double[][] A = {{1, dt},{0,1}};
+        double[] B = {0.5*dt*dt,dt};
+        double[][] H = {{1,0},{0,1}};
+        double[][] R = {{0.2,0},{0,0.2}};
+        double[][] Q = {{0.2,0},{0,0.2}};
+        double[][] I = {{1,0},{0,1}};
+
+
         @Override
         public void run() {
-            A[0][0] = 1;    A[0][1] = 0;    A[0][2] = 0;    A[0][3] = dt;   A[0][4] = 0;    A[0][5] = 0;
-            A[1][0] = 0;    A[1][1] = 1;    A[1][2] = 0;    A[1][3] = 0;   A[1][4] = dt;    A[1][5] = 0;
-            A[2][0] = 0;    A[2][1] = 0;    A[2][2] = 1;    A[2][3] = 0;   A[2][4] = 0;    A[2][5] = dt;
-            A[3][0] = 0;    A[3][1] = 0;    A[3][2] = 0;    A[3][3] = 1;   A[3][4] = 0;    A[3][5] = 0;
-            A[4][0] = 0;    A[4][1] = 0;    A[4][2] = 0;    A[4][3] = 0;   A[4][4] = 1;    A[4][5] = 0;
-            A[5][0] = 0;    A[5][1] = 0;    A[5][2] = 0;    A[5][3] = 0;   A[5][4] = 0;    A[5][5] = 1;
-            B[0][0] = 0.5*dt*dt;            B[0][1] = 0;    B[0][2] = 0;
-            B[1][0] = 0;    B[1][1] = 0.5*dt*dt;            B[1][2] = 0;
-            B[2][0] = 0;    B[2][1] = 0;        B[2][2] = 0.5*dt*dt;
-            B[3][0] = dt;   B[3][1] = 0;    B[3][2] = 0;
-            B[4][0] = 0;    B[4][1] = dt;   B[4][2] = 0;
-            B[5][0] = 0;    B[5][1] = 0;    B[5][2] = dt;
-            xp[0] = UTMPos[0];   xp[1] = UTMPos[1];   xp[2] = UTMPos[2];   xp[3] = 0; xp[4] = 0; xp[5] = 0;
-
-            while(!threadInterrupt){
+            xp_n[0] = UTMPos[0]; xp_n[1] = 0;
+            xp_e[0] = UTMPos[1]; xp_e[1] = 0;
+            while (!threadInterrupt) {
+                //Transform acceleration
+                RMat = R_BN(estAngles[0], estAngles[1], estAngles[2]);    //Creates the DCM from body to ned
+                acc_N = LA.vectMatMultiply(RMat, acc_B);
+                Log.i("AccN","AccN"+acc_N[0]+" "+acc_N[1]+" "+acc_N[2]);
 
                 //Predict step
-                //Transform acceleration
-                RMat = R_BN(estAngles[0],estAngles[1],estAngles[2]);    //Creates the DCM from body to ned
-                acc_N = LA.vectMatMultiply(RMat, acc_B);
-                //Calculate a priori estimate
-                xm = LA.vectAdd(LA.vectMatMultiply(A,xp),LA.vectMatMultiply(B,acc_N),1);
-                Pm = LA.matrixAdd(LA.matrixMultiply(LA.matrixMultiply(A,Pp),LA.matrixTranspose(A)),Q);
-
+                xm_n = LA.vectAdd(LA.vectMatMultiply(A,xp_n),LA.vectConstMultiply(B,acc_N[0]),1);
+                Log.i("XM", "XMn "+xm_n[0]+" VNn "+xm_n[1]);
+                pm_n = LA.matrixAdd(LA.matrixMultiply(LA.matrixMultiply(A,pp_n),LA.matrixTranspose(A)), Q);
+                Log.i("PM","PNn "+pm_n[0][0]+" VNn "+pm_n[1][1]);
+                xm_e = LA.vectAdd(LA.vectMatMultiply(A,xp_e),LA.vectConstMultiply(B,acc_N[1]),1);
+                Log.i("XM", "XMe "+xm_e[0]+" VNe "+xm_e[1]);
+                pm_e = LA.matrixAdd(LA.matrixMultiply(LA.matrixMultiply(A,pp_e),LA.matrixTranspose(A)), Q);
+                Log.i("PM","PNe "+pm_e[0][0]+" VNe "+pm_e[1][1]);
 
                 //Update step
-                gpsdata[0] = UTMPos[0];     gpsdata[1] = UTMPos[1];     gpsdata[2] = UTMPos[2];     gpsdata[3] = vel_N[0];  gpsdata[4] = vel_N[1];  gpsdata[5] = vel_N[2];
-                //Calculate Kalman gain
-                K = LA.matrixMultiply( LA.matrixMultiply(Pm,LA.matrixTranspose(H)), LA.matrixInverse( LA.matrixAdd( LA.matrixMultiply(H, LA.matrixMultiply(Pm,LA.matrixTranspose(H) ) ) , R) ) );
-                //Calculate a posteori estimate
-                xp = LA.vectAdd(xm, LA.vectMatMultiply(K,gpsdata),1);
-                Pp = LA.matrixMultiply( LA.matrixSubtract(I, LA.matrixMultiply(K, H)), Pm);
+                if (newGPSData) {
+                    gps_n[0] = UTMPos[0]; gps_n[1] = vel_N[0];  gps_e[0] = UTMPos[1];   gps_e[1] = vel_N[1];
+                    S_n = LA.matrixAdd(LA.matrixMultiply(LA.matrixMultiply(H,pm_n),LA.matrixTranspose(H)),R);
+                    K_n = LA.matrixMultiply(LA.matrixMultiply(pm_n,LA.matrixTranspose(H)), LA.matrixInverse(S_n));
+                    Log.i("K", "Kn "+K_n[0][0]+" "+K_n[0][1]+" "+K_n[1][0]+" "+K_n[1][1]);
+
+                    S_e = LA.matrixAdd(LA.matrixMultiply(LA.matrixMultiply(H,pm_e),LA.matrixTranspose(H)),R);
+                    K_e = LA.matrixMultiply(LA.matrixMultiply(pm_e,LA.matrixTranspose(H)),LA.matrixInverse(S_e));
+                    Log.i("K", "Ke "+K_e[0][0]+" "+K_e[0][1]+" "+K_e[1][0]+" "+K_e[1][1]);
+
+                    xp_n = LA.vectAdd(xm_n,LA.vectMatMultiply(K_n,LA.vectAdd(gps_n, xm_n,-1)),1);
+                    Log.i("XP","XPn "+xp_n[0]+" VP "+xp_n[1]);
+                    pp_n = LA.matrixSubtract(I,LA.matrixMultiply(K_n,pm_n));
+                    Log.i("PP", "PPn "+pp_n[0][0]+" VP "+pp_n[1][1]);
+                    xp_e = LA.vectAdd(xm_e,LA.vectMatMultiply(K_e,LA.vectAdd(gps_e, xm_e,-1)),1);
+                    Log.i("XP","XPe "+xp_e[0]+" VP "+xp_e[1]);
+                    pp_e = LA.matrixSubtract(I,LA.matrixMultiply(K_e,pm_e));
+                    Log.i("PP", "PPe "+pp_e[0][0]+" VP "+pp_e[1][1]);
+                    try {
+                        mutex.lock();
+                        newGPSData = false;
+                    } finally {
+                        mutex.unlock();
+                    }
+                }
 
                 //Loop thread every 5mS - 200Hz
                 try {
@@ -276,7 +380,6 @@ public class KalmanEstimatorService extends Service {
                     e.printStackTrace();
                 }
             }
-
         }
     };
 
@@ -473,9 +576,13 @@ public class KalmanEstimatorService extends Service {
             acc[1] = sensorEvent.values[0];   //Y-axis
             acc[2] = sensorEvent.values[2];   //Z-axis
 
-            acc_B[0] += (acc_B[0]-acc[0])/accFilterConstant;
-            acc_B[1] += (acc_B[1]-acc[1])/accFilterConstant;
-            acc_B[2] += (acc_B[2]-acc[2])/accFilterConstant;
+            acc_B[0] += (acc[0]-acc_B[0])/accFilterConstant;
+            acc_B[1] += (acc[1]-acc_B[1])/accFilterConstant;
+            acc_B[2] += (acc[2]-acc_B[2])/accFilterConstant;
+            if(acc_B[0] < 0.2 && acc_B[0] > -0.2) acc_B[0] = 0;
+            if(acc_B[1] < 0.2 && acc_B[1] > -0.2) acc_B[1] = 0;
+            if(acc_B[2] < 0.7 && acc_B[2] > -0.7) acc_B[2] = 0;
+            Log.i("LinearAccelerometer", "x "+acc_B[0]+" y "+acc_B[1]+" z "+acc_B[2]);
         }
         @Override
         public void onAccuracyChanged(Sensor sensor, int i) {
@@ -579,8 +686,8 @@ public class KalmanEstimatorService extends Service {
         }
     };
 
+    volatile boolean startOnce = false;
     //double vT;
-    double[] vel_N = {0,0,0};
     double time = 0;
     double lastTime = 0;
     double[] LastUTM = {0,0,0};
@@ -597,7 +704,21 @@ public class KalmanEstimatorService extends Service {
             vehicleState[6] = UTMPos[0];    vehicleState[7] = UTMPos[1];    vehicleState[8] = UTMPos[2];
             lastTime = time;
             LastUTM = UTMPos;
+
+            try {
+                mutex.lock();
+                Log.i("Lock","Lock");
+                newGPSData = true;
+            }finally {
+                mutex.unlock();
+                Log.i("Lock", "unlock");
+            }
             Log.i("UTMTest", "N "+UTMPos[0]+" E "+UTMPos[1]+" H "+UTMPos[2]);
+
+            if(!startOnce) {
+                kalmanThread.start();
+                startOnce = true;
+            }
         }
     };
 
@@ -660,6 +781,161 @@ public class KalmanEstimatorService extends Service {
         TMat[2][0] = 0;     TMat[2][1] = sin(R)/cos(P);     TMat[2][2] = cos(R)/cos(P);
         return TMat;
     }*/
+
+/*
+double[][] RMat = new double[3][3];
+        double[] acc_N = new double[3];
+        double[] gpsdata = new double[6];
+
+        double[][] A = {{1,0,0,dt,0,0},{0,1,0,0,dt,0},{0,0,1,0,0,dt},{0,0,0,1,0,0},{0,0,0,0,1,0},{0,0,0,0,0,1}};
+        double[][] B = {{0.5*dt*dt, 0, 0},{0, 0.5*dt*dt, 0},{0, 0, 0.5*dt*dt},{dt, 0, 0},{0, dt, 0},{0, 0, dt}};
+        double[] xm = new double[6];
+        double[] xp = new double[6];
+        double[][] K = new double[6][6];
+        double[][] Pm = new double[6][6];
+        double[][] Pp = {{10, 0,0,0,0,0},{0, 10, 0,0,0,0},{0,0, 10, 0,0,0},{0,0,0, 10, 0,0},{0,0,0,0, 10, 0},{0,0,0,0,0, 10}};
+        double[][] Q = {{0.2, 0,0,0,0,0},{0, 0.2, 0,0,0,0,0},{0,0, 0.2, 0,0,0},{0,0,0, 0.2, 0,0},{0,0,0,0, 0.2, 0},{0,0,0,0,0, 0.2}};
+        double[][] R = {{0.2, 0,0,0,0,0},{0, 0.2, 0,0,0,0,0},{0,0, 0.2, 0,0,0},{0,0,0, 0.2, 0,0},{0,0,0,0, 0.2, 0},{0,0,0,0,0, 0.2}};
+        double[][] I = {{1,0,0,0,0,0},{0,1,0,0,0,0},{0,0,1,0,0,0},{0,0,0,1,0,0},{0,0,0,0,1,0},{0,0,0,0,0,1}};
+        double[][] H = {{1,0,0,0,0,0},{0,1,0,0,0,0},{0,0,1,0,0,0},{0,0,0,1,0,0},{0,0,0,0,1,0},{0,0,0,0,0,1}};
+
+        @Override
+        public void run() {
+                xp[0] = UTMPos[0];
+                xp[1] = UTMPos[1];
+                xp[2] = UTMPos[2];
+                xp[3] = 0;
+                xp[4] = 0;
+                xp[5] = 0;
+
+            while (!threadInterrupt) {
+                //Predict step
+                //Transform acceleration
+                RMat = R_BN(estAngles[0], estAngles[1], estAngles[2]);    //Creates the DCM from body to ned
+                acc_N = LA.vectMatMultiply(RMat, acc_B);
+
+                //Calculate a priori estimate
+                xm = LA.vectAdd(LA.vectMatMultiply(A, xp), LA.vectMatMultiply(B, acc_N), 1);
+                Pm = LA.matrixAdd(LA.matrixMultiply(LA.matrixMultiply(A, Pp), LA.matrixTranspose(A)), Q);
+
+                if (newGPSData) {
+                    //Update step
+                    gpsdata[0] = UTMPos[0]; gpsdata[1] = UTMPos[1]; gpsdata[2] = UTMPos[2];
+                    gpsdata[3] = vel_N[0];  gpsdata[4] = vel_N[1];  gpsdata[5] = vel_N[2];
+
+                    //Calculate Kalman gain
+                    //K = LA.matrixMultiply(LA.matrixMultiply(Pm, LA.matrixTranspose(H)), LA.matrixInverse(LA.matrixAdd(LA.matrixMultiply(H, LA.matrixMultiply(Pm, LA.matrixTranspose(H))), R)));
+                    K = LA.matrixMultiply(Pm,LA.matrixInverse(LA.matrixAdd(Pm, R)));
+                    //Calculate a posteori estimate
+                    xp = LA.vectAdd(xm, LA.vectMatMultiply(K, LA.vectAdd(gpsdata, xm, -1)), 1);
+                    //Pp = LA.matrixMultiply(LA.matrixSubtract(I, LA.matrixMultiply(K, H)), Pm);
+                    Pp = LA.matrixMultiply(LA.matrixSubtract(I,K), Pm);
+                    try {
+                        mutex.lock();
+                        newGPSData = false;
+                    } finally {
+                        mutex.unlock();
+                    }
+                }
+                Log.d("PM","Pm1 "+Pm[0][0]+" Pm2 "+Pm[1][1]+" Pm3 "+Pm[2][2]+" Pm4 "+Pm[3][3]+" Pm5 "+Pm[4][4]+" Pm6 "+Pm[5][5]);
+                Log.d("PP","Pp1 "+Pp[0][0]+" Pp2 "+Pp[1][1]+" Pp3 "+Pp[2][2]+" Pp4 "+Pp[3][3]+" Pp5 "+Pp[4][4]+" Pp6 "+Pp[5][5]);
+                //Log.d("KalmanGain","K1 "+K[0][0]+" K2 "+K[1][1]+" K3 "+K[2][2]+" K4 "+K[3][3]+" K5 "+K[4][4]+" K6 "+K[5][5]);
+                Log.d("KalmanGain", "Gain "+K[0][0]+" "+K[0][1]+" "+K[0][2]+" "+K[0][3]+" "+K[0][4]+" "+K[0][5]+" "+K[1][0]+" "+K[1][1]+" "+K[1][2]+" "+K[1][3]+" "+K[1][4]+" "+K[1][5]+" "+K[2][0]+" "+K[2][1]+" "+K[2][2]+" "+K[2][3]+" "+K[2][4]+" "+K[2][5]+" "+K[3][0]+" "+K[3][1]+" "+K[3][2]+" "+K[3][3]+" "+K[3][4]+" "+K[3][5]+" "+K[4][0]+" "+K[4][1]+" "+K[4][2]+" "+K[4][3]+" "+K[4][4]+" "+K[4][5]+" "+K[5][0]+" "+K[5][1]+" "+K[5][2]+" "+K[5][3]+" "+K[5][4]+" "+K[5][5]);
+                Log.i("XM", "xm1 " + xm[0] + " xm2 " + xm[1] + " xm3 " + xm[2] + " xm4 " + xm[3] + " xm5 " + xm[4] + " xm6 " + xm[5]);    //Before update
+                Log.i("XP", "Pn " + xp[0] + " Pe " + xp[1] + " Ph " + xp[2] + " Vn " + xp[3] + " Ve " + xp[4]);   //After update
+
+                //Loop thread every 5mS - 200Hz
+                try {
+                    Thread.sleep(5);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+ */
+
+/*
+double[][] RMat = new double[3][3];
+        double[] acc_N = new double[3];
+        double[] gpsdata = new double[9];
+        double[] accdata = new double[9];
+
+        double[][] A = {{1,0,0,dt,0,0,0.5*dt*dt,0,0},{0,1,0,0,dt,0,0,0.5*dt*dt,0},{0,0,1,0,0,dt,0,0,0.5*dt*dt},{0,0,0,1,0,0,dt,0,0},{0,0,0,0,1,0,0,dt,0},{0,0,0,0,0,1,0,0,dt},{0,0,0,0,0,0,1,0,0},{0,0,0,0,0,0,0,1,0},{0,0,0,0,0,0,0,0,1}};
+        //double[][] B = {{0.5*dt*dt, 0, 0},{0, 0.5*dt*dt, 0},{0, 0, 0.5*dt*dt},{dt, 0, 0},{0, dt, 0},{0, 0, dt}};
+        double[] xm = new double[9];
+        double[] xp = new double[9];
+        double[][] K = new double[9][9];
+        double[][] Pm = new double[9][9];
+        double[][] Pp = {{10,0,0,0,0,0,0,0,0},{0,10,0,0,0,0,0,0,0},{0,0,10,0,0,0,0,0,0},{0,0,0,10,0,0,0,0,0},{0,0,0,0,10,0,0,0,0},{0,0,0,0,0,10,0,0,0},{0,0,0,0,0,0,10,0,0},{0,0,0,0,0,0,0,0,10,0},{0,0,0,0,0,0,0,0,10}};
+        double[][] Q = {{0.2,0,0,0,0,0,0,0,0},{0,0.2,0,0,0,0,0,0,0,0},{0,0,0.2,0,0,0,0,0,0},{0,0,0,0.2,0,0,0,0,0},{0,0,0,0,0.2,0,0,0,0},{0,0,0,0,0,0.2,0,0,0},{0,0,0,0,0,0,0.2,0,0},{0,0,0,0,0,0,0,0.2,0},{0,0,0,0,0,0,0,0,0.2}};
+        double[][] R = {{0.2,0,0,0,0,0,0,0,0},{0,0.2,0,0,0,0,0,0,0,0},{0,0,0.2,0,0,0,0,0,0},{0,0,0,0.2,0,0,0,0,0},{0,0,0,0,0.2,0,0,0,0},{0,0,0,0,0,0.2,0,0,0},{0,0,0,0,0,0,0.2,0,0},{0,0,0,0,0,0,0,0.2,0},{0,0,0,0,0,0,0,0,0.2}};
+        double[][] I = {{1,0,0,0,0,0,0,0,0},{0,1,0,0,0,0,0,0,0},{0,0,1,0,0,0,0,0,0},{0,0,0,1,0,0,0,0,0},{0,0,0,0,1,0,0,0,0},{0,0,0,0,0,1,0,0,0},{0,0,0,0,0,0,1,0,0},{0,0,0,0,0,0,0,1,0},{0,0,0,0,0,0,0,0,1}};
+        double[][] H = {{1,0,0,0,0,0,0,0,0},{0,1,0,0,0,0,0,0,0},{0,0,1,0,0,0,0,0,0},{0,0,0,1,0,0,0,0,0},{0,0,0,0,1,0,0,0,0},{0,0,0,0,0,1,0,0,0},{0,0,0,0,0,0,1,0,0},{0,0,0,0,0,0,0,1,0},{0,0,0,0,0,0,0,0,1}};
+
+        @Override
+        public void run() {
+                xp[0] = UTMPos[0];
+                xp[1] = UTMPos[1];
+                xp[2] = UTMPos[2];
+                xp[3] = 0;
+                xp[4] = 0;
+                xp[5] = 0;
+                xp[6] = 0;
+                xp[7] = 0;
+                xp[8] = 0;
+
+            while (!threadInterrupt) {
+                //Predict step
+                //Transform acceleration
+                RMat = R_BN(estAngles[0], estAngles[1], estAngles[2]);    //Creates the DCM from body to ned
+                acc_N = LA.vectMatMultiply(RMat, acc_B);
+                Log.i("ACCN","AN"+acc_N[0]+" "+acc_N[1]+" "+acc_N[2]);
+                accdata[0] = 0; accdata[1] = 0; accdata[2] = 0; accdata[3] = 0; accdata[4] = 0; accdata[5] = 0; accdata[6] = acc_N[0]; accdata[7] = acc_N[1]; accdata[8] = acc_N[2];
+
+                //Calculate a priori estimate
+                xm = LA.vectMatMultiply(A, xp);
+                Pm = LA.matrixAdd(LA.matrixMultiply(LA.matrixMultiply(A, Pp), LA.matrixTranspose(A)), Q);
+
+                //Update step 1
+                K = LA.matrixMultiply(Pm,LA.matrixInverse(LA.matrixAdd(Pm, R)));
+                xp = LA.vectAdd(xm, LA.vectMatMultiply(K, LA.vectAdd(accdata, xm, -1)), 1);
+
+                if (newGPSData) {
+                    //Update step 2
+                    gpsdata[0] = UTMPos[0]; gpsdata[1] = UTMPos[1]; gpsdata[2] = UTMPos[2];
+                    gpsdata[3] = vel_N[0];  gpsdata[4] = vel_N[1];  gpsdata[5] = vel_N[2];
+                    gpsdata[6] = acc_N[0];  gpsdata[7] = acc_N[1];  gpsdata[8] = acc_N[2];
+
+                    //Calculate Kalman gain
+                    //K = LA.matrixMultiply(LA.matrixMultiply(Pm, LA.matrixTranspose(H)), LA.matrixInverse(LA.matrixAdd(LA.matrixMultiply(H, LA.matrixMultiply(Pm, LA.matrixTranspose(H))), R)));
+                    K = LA.matrixMultiply(Pm,LA.matrixInverse(LA.matrixAdd(Pm, R)));
+                    //Calculate a posteori estimate
+                    xp = LA.vectAdd(xm, LA.vectMatMultiply(K, LA.vectAdd(gpsdata, xm, -1)), 1);
+                    //Pp = LA.matrixMultiply(LA.matrixSubtract(I, LA.matrixMultiply(K, H)), Pm);
+                    Pp = LA.matrixMultiply(LA.matrixSubtract(I,K), Pm);
+                    try {
+                        mutex.lock();
+                        newGPSData = false;
+                    } finally {
+                        mutex.unlock();
+                    }
+                }
+                Log.d("PM","Pm1 "+Pm[0][0]+" Pm2 "+Pm[1][1]+" Pm3 "+Pm[2][2]+" Pm4 "+Pm[3][3]+" Pm5 "+Pm[4][4]+" Pm6 "+Pm[5][5]);
+                Log.d("PP","Pp1 "+Pp[0][0]+" Pp2 "+Pp[1][1]+" Pp3 "+Pp[2][2]+" Pp4 "+Pp[3][3]+" Pp5 "+Pp[4][4]+" Pp6 "+Pp[5][5]);
+                //Log.d("KalmanGain","K1 "+K[0][0]+" K2 "+K[1][1]+" K3 "+K[2][2]+" K4 "+K[3][3]+" K5 "+K[4][4]+" K6 "+K[5][5]);
+                Log.d("KalmanGain", "Gain "+K[0][0]+" "+K[0][1]+" "+K[0][2]+" "+K[0][3]+" "+K[0][4]+" "+K[0][5]+" "+K[1][0]+" "+K[1][1]+" "+K[1][2]+" "+K[1][3]+" "+K[1][4]+" "+K[1][5]+" "+K[2][0]+" "+K[2][1]+" "+K[2][2]+" "+K[2][3]+" "+K[2][4]+" "+K[2][5]+" "+K[3][0]+" "+K[3][1]+" "+K[3][2]+" "+K[3][3]+" "+K[3][4]+" "+K[3][5]+" "+K[4][0]+" "+K[4][1]+" "+K[4][2]+" "+K[4][3]+" "+K[4][4]+" "+K[4][5]+" "+K[5][0]+" "+K[5][1]+" "+K[5][2]+" "+K[5][3]+" "+K[5][4]+" "+K[5][5]);
+                Log.i("XM", "Pn " + xm[0] + " Pe " + xm[1] + " Ph " + xm[2] + " Vn " + xm[3] + " Ve " + xm[4] + " Vh " + xm[5] + " An " + xm[6] + " Ae " + xm[7] + " Ah " +xm[8]);    //Before update
+                Log.i("XP", "Pn " + xp[0] + " Pe " + xp[1] + " Ph " + xp[2] + " Vn " + xp[3] + " Ve " + xp[4] + " Vh " + xp[5] + " An " + xp[6] + " Ae " + xp[7] + " Ah " +xp[8]);   //After update
+
+                //Loop thread every 5mS - 200Hz
+                try {
+                    Thread.sleep(5);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+ */
 
 
 

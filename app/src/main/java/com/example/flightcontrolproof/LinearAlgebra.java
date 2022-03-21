@@ -1,5 +1,7 @@
 package com.example.flightcontrolproof;
 
+import java.util.Arrays;
+
 public class LinearAlgebra {
     double[][] matrixAdd(double[][] J, double[][] Q) {
         int n = J.length;
@@ -51,9 +53,10 @@ public class LinearAlgebra {
 
     double[] vectMatMultiply(double[][] mat, double[] vect){
         int n = mat.length;
+        int nn = mat[0].length;
         double[] vectRet = new double[n];
         for(int i=0; i<n; i++){
-            for(int j=0; j<n; j++){
+            for(int j=0; j<nn; j++){
                 vectRet[i] += mat[i][j]*vect[j];
             }
         }
@@ -79,66 +82,64 @@ public class LinearAlgebra {
     }
 
 
-    //https://www.sanfoundry.com/java-program-find-inverse-matrix/
-    double[][] matrixInverse(double[][] mat){
-        int n = mat.length;
-        double[][] x = new double[n][n];
-        double[][] b = new double[n][n];
-        int[] index = new int[n];
-        gaussianPivot(mat,index);
-
-        for(int i=0; i<n; i++){
-            for(int j=i+1; j<n; ++j){
-                for(int k=0; k<n; ++k){
-                    b[index[j]][k] -= mat[index[j]][i]*b[index[i]][k];
-                }
-            }
+    public double[][] matrixInverse(final double[][] squareMatrix) {
+        final int size = squareMatrix.length;
+        final double[][] inverseMatrix = new double[size][size];
+        for (int i = 0; i < size; ++i) {
+            Arrays.fill(inverseMatrix[i], 0.0);
+            inverseMatrix[i][i] = 1.0;
         }
-        for(int i=0; i<n; ++i){
-            x[n-1][i] = b[index[n-1]][i]/mat[index[n-1]][n-1];
-            for(int j=n-2; j>=0; --j){
-                x[j][i] = b[index[j]][i];
-                for(int k=j+1; k<n; ++k){
-                    x[j][i] -= mat[index[j]][k]*x[k][i];
-                }
-                x[j][i] /= mat[index[j]][j];
-            }
+        for (int i = 0; i < size; ++i) {
+            findPivotAndSwapRow(i, squareMatrix, inverseMatrix, size);
+            sweep(i, squareMatrix, inverseMatrix, size);
         }
-        return x;
+        return inverseMatrix;
     }
-
-    void gaussianPivot(double[][] a, int[] index){
-        double[] c = new double[14];
-        for(int i=0; i<14;i++){
-            index[i] = i;
-            double c1 = 0;
-            for(int j=0; j<14; j++){
-                double c0 = Math.abs(a[i][j]);
-                if(c0 > c1){
-                    c1 = c0;
-                }
+    /**
+     * A utility function to inverse matrix.
+     * Find a pivot and swap the row of squareMatrix0 and squareMatrix1
+     */
+    private static void findPivotAndSwapRow(final int row, final double[][] squareMatrix0, final double[][] squareMatrix1, final int size) {
+        int ip = row;
+        double pivot = Math.abs(squareMatrix0[row][row]);
+        for (int i = row + 1; i < size; ++i) {
+            if (pivot < Math.abs(squareMatrix0[i][row])) {
+                ip = i;
+                pivot = Math.abs(squareMatrix0[i][row]);
             }
-            c[i] = c1;
         }
-        int k = 0;
-        for(int j=0;j<14-1;j++){
-            double pi1 = 0;
-            for(int i=j;i<14; i++){
-                double pi0 = Math.abs(a[index[i]][j]);
-                pi0 /= c[index[i]];
-                if(pi0>pi1){
-                    pi1 = pi0;
-                    k = i;
-                }
+        if (ip != row) {
+            for (int j = 0; j < size; ++j) {
+                final double temp0 = squareMatrix0[ip][j];
+                squareMatrix0[ip][j] = squareMatrix0[row][j];
+                squareMatrix0[row][j] = temp0;
+                final double temp1 = squareMatrix1[ip][j];
+                squareMatrix1[ip][j] = squareMatrix1[row][j];
+                squareMatrix1[row][j] = temp1;
             }
-            int itmp = index[j];
-            index[j] = index[k];
-            index[k] = itmp;
-            for(int i=j+1; i<14; i++){
-                double pj = a[index[i]][j]/a[index[j]][j];
-                a[index[i]][j] = pj;
-                for(int l=j+1; l<14; ++l){
-                    a[index[i]][l] -= pj*a[index[j]][l];
+        }
+    }
+    /**
+     * A utility function to inverse matrix. This function calculates answer for each row by
+     * sweeping method of Gauss Jordan elimination
+     */
+    private static void sweep(final int row, final double[][] squareMatrix0, final double[][] squareMatrix1, final int size){
+        final double pivot = squareMatrix0[row][row];
+
+        for (int j = 0; j < size; ++j) {
+            squareMatrix0[row][j] /= pivot;
+            squareMatrix1[row][j] /= pivot;
+        }
+        for (int i = 0; i < size; i++) {
+            final double sweepTargetValue = squareMatrix0[i][row];
+            if (i != row) {
+                for (int j = row; j < size; ++j) {
+                    squareMatrix0[i][j] -= sweepTargetValue
+                            * squareMatrix0[row][j];
+                }
+                for (int j = 0; j < size; ++j) {
+                    squareMatrix1[i][j] -= sweepTargetValue
+                            * squareMatrix1[row][j];
                 }
             }
         }
