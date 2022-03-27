@@ -17,6 +17,15 @@
             android:id="@+id/pressureCalibrationButton"
             android:text="Calibrate barometer"
             />
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/GPScalibrationButton"
+            android:text="Calibrate GPS height"/>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/GPSData"/>
 
         <Button
             android:layout_width="wrap_content"

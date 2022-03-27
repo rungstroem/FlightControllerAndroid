@@ -1,5 +1,8 @@
 package com.example.flightcontrolproof;
 
+import static java.lang.Math.PI;
+import static java.lang.Math.pow;
+
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Service;
@@ -34,7 +37,7 @@ public class GPSService extends Service {
     HandlerThread GPSHandlerThread;
     Looper GPSLooper;
 
-    double[] UTMPosition = new double[3];
+    double[] UTMPosition = new double[4];
     double[] UTMTemp = new double[2];
     UTMConverterClass UTMconv;
 
@@ -69,9 +72,19 @@ public class GPSService extends Service {
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
     }
 
+    double[] lastPos = {0,0};
+    double T2;
+    double T1;
     public void sendUTMtoActivity(Location location){
+        T1 = System.currentTimeMillis();
         UTMTemp = UTMconv.getUTM(location.getLatitude(),location.getLongitude());
         UTMPosition[0] = UTMTemp[0]; UTMPosition[1] = UTMTemp[1]; UTMPosition[2] = location.getAltitude();
+        if(location.hasSpeed()){
+            UTMPosition[3] = location.getSpeed();
+        }else{
+            UTMPosition[3] = Math.sqrt(pow(UTMTemp[0]-lastPos[0],2) + pow(UTMTemp[1]-lastPos[1],2))/((T1-T2)/1000);
+        }
+        lastPos[0] = UTMTemp[0]; lastPos[1] = UTMTemp[1]; T2 = T1;
         Intent intent = new Intent("GPSLocationUpdate");
         intent.putExtra("UTMCoordinates", UTMPosition);
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent);

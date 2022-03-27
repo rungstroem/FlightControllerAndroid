@@ -25,6 +25,7 @@ import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.Toast;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -55,6 +56,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     Button mButton2;
 
     SharedPreferences mSharedPref;
+    UTMConverterClass UTMConv;
+    double[] UTM = new double[2];
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,6 +68,12 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         //Create waypoint list for waypoint navigation
         waypoints = new ArrayList<LatLng>();
         getLocation();
+
+        //Initialize UTM converter class
+        UTMConv = new UTMConverterClass();
+
+        //Shared preference
+        mSharedPref = this.getSharedPreferences("WaypointList", this.MODE_PRIVATE);
 
         set_layout();
         binding = ActivityMapsBinding.inflate(getLayoutInflater());
@@ -99,8 +108,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 curLat = location.getLatitude();
                 curLon = location.getLongitude();
                 curAlt = location.getAltitude();
-                mLocationManager.removeUpdates(this);
-                mLocationManager = null;
             }
         });
         Location location = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
@@ -119,7 +126,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     @Override
     public void onMapReady(GoogleMap googleMap) {
         LatLng initLatLon = new LatLng(curLat, curLon);
-        //waypoints.add(initLatLon);
+        waypoints.add(initLatLon);
         mMap = googleMap;
         mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(initLatLon.latitude, initLatLon.longitude), zoomLevel));
         if (mMap != null) {
@@ -130,7 +137,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 @Override
                 public void onMapClick(LatLng latLng) {
                     waypointNR++;
-                    mMap.addMarker(new MarkerOptions().position(latLng).title("Waypoint "+waypointNR+" Lat: "+latLng.latitude+" Lon: "+ latLng.longitude));
+                    UTM = UTMConv.getUTM(latLng.latitude,latLng.longitude);
+                    //mMap.addMarker(new MarkerOptions().position(latLng).title("Waypoint "+waypointNR+" Lat: "+latLng.latitude+" Lon: "+ latLng.longitude));
+                    mMap.addMarker(new MarkerOptions().position(latLng).title("Waypoint "+waypointNR+" Lat: "+UTM[0]+" Lon: "+ UTM[1]));
                     mMap.addPolyline(new PolylineOptions().add(waypoints.get(waypointNR-1), latLng).width(lineThickness));
                     waypoints.add(latLng);
                 }
@@ -141,7 +150,18 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             @Override
             public void onClick(View view) {
                 SharedPreferences.Editor editor = mSharedPref.edit();
+                editor.clear(); //Clears old data
+                editor.commit();
+
+                double[] UTMTemp = new double[2];
                 // !!! You ended here kenneth !!!
+                for(int i=1; i<waypoints.size();i++){   //i=1 to ignore initLatLon at i=0
+                    UTMTemp = UTMConv.getUTM(waypoints.get(i).latitude,waypoints.get(i).longitude);
+                    editor.putLong("UTMLatitude"+i,Double.doubleToRawLongBits(UTMTemp[0]));
+                    editor.putLong("UTMLongitude"+i, Double.doubleToRawLongBits(UTMTemp[1]));
+                }
+                editor.apply();
+                Toast.makeText(getApplicationContext(), "Waypoint list saved", Toast.LENGTH_LONG).show();
 
 
                 //Intent intent1 = new Intent(MapsActivity.this, controlActivity.class);
@@ -156,7 +176,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 waypoints.clear();
                 mMap.clear();
                 mMap.addMarker(new MarkerOptions().position(initLatLon).title("Current location"+" Lat: "+initLatLon.latitude+" Lon: "+initLatLon.longitude));
-                //waypoints.add(initLatLon);
+                waypoints.add(initLatLon);
             }
         });
     }

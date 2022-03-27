@@ -159,6 +159,9 @@ public class GameControl extends AppCompatActivity {
                         wifiClientThread = new Thread(client);
                         wifiClientThread.start();
                     } else{
+                        serverIP = "192.168.8.101";
+                        wifiClientThread = new Thread(client);
+                        wifiClientThread.start();
                         Toast.makeText(getApplicationContext(), "Input flight controller IP",Toast.LENGTH_LONG).show();
                     }
                     break;

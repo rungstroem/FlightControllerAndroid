@@ -46,13 +46,14 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
     Button throttleOKButtonInput;
     Button pDampOKButtonInput;
     Button qDampOKButtonInput;
+    TextView speedView;
 
-    private double pitchKp = 2.5;
-    private double pitchKi = 0.3;
-    private double pitchKd = 0.2;
+    private double pitchKp = 1.5;
+    private double pitchKi = 0.1;
+    private double pitchKd = 0.1;
 
-    private double rollKp = 2;
-    private double rollKi = 0.5;
+    private double rollKp = 1.5;
+    private double rollKi = 0.1;
     private double rollKd = 0.1;
 
     private double qRateKp = 0;
@@ -67,13 +68,13 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
     private double heightKi = 0.0;  //Because barometer is unstable I think P controller is best.
     private double heightKd = 0.0;
 
-    private double throttleKp = 0.0;
-    private double throttleKi = 0.0;
+    private double throttleKp = 5;
+    private double throttleKi = 0.05;
     private double throttleKd = 0.0;
 
     private double rad2deg = 180/Math.PI;
     volatile boolean threadInterrupt = false;
-    private double[] vehicleState = new double[9];  //[Roll Pitch Yaw p q r Px Py Pz]
+    private double[] vehicleState = new double[10];  //[Roll Pitch Yaw p q r Px Py Pz Va]
 
     PowerManager powerManager;
     PowerManager.WakeLock wakeLock;
@@ -85,20 +86,21 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
     Intent GPSIntent;
 
     Thread controllerThread;
+    Thread speedThread;
     Thread guidanceThread;
-    Thread altitudeThread;
     LinearAlgebra LA;
 
     //PID controllers
     PIDController pitchController;
     PIDController qRateController;
     PIDController heightController;
+    PIDController speedController;
     PIDController rollController;
     PIDController pRateController;
 
     double RollSetpoint = 0;
-    double PitchSetpoint = -10;
-    int throttleSetpoint = 0;
+    double PitchSetpoint = 0;
+    int SpeedSetpoint = 25; //20 m/s
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -147,6 +149,8 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         qDampOKButtonInput = findViewById(R.id.qDampOKButton);
         qDampOKButtonInput.setOnClickListener(this);
 
+        speedView = findViewById(R.id.SpeedTextview);
+
         //Initialize serial connection
         serialconnection = new Serialconnection(9600, 8, this);
 
@@ -163,7 +167,7 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         startService(KalmanIntent);
         //Start Guidance service
         GuidanceIntent = new Intent(this, GuidanceService.class);
-        //startService(GuidanceIntent);
+        startService(GuidanceIntent);
         //Start Wifi communication
         WifiIntent = new Intent(this,WifiCommunicationService.class);
         startService(WifiIntent);
@@ -186,6 +190,8 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         qRateController.setSaturation(45,-35);
         heightController = new PIDController(heightKp,heightKi,heightKd);
         heightController.setSaturation(45,-45); //This is angle output so set saturation to maximum pitch angle
+        speedController = new PIDController(throttleKp,throttleKi,throttleKd);
+        speedController.setSaturation(100,15);   //Just to make sure that we don't send a NULL character to the µC
         rollController = new PIDController(rollKp,rollKi, rollKd);
         rollController.setSaturation(35,-35);   //I don't like an un even value here...
         pRateController = new PIDController(qRateKp,qRateKi,qRateKd);
@@ -194,10 +200,10 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         //Start threads
         controllerThread = new Thread(controller);
         controllerThread.start();
+        speedThread = new Thread(throttleControl);
+        speedThread.start();
         //guidanceThread = new Thread(guidanceLOS);
         //guidanceThread.start();
-        //altitudeThread = new Thread(guidanceAltitude);
-        //altitudeThread.start();
 
         Log.i("SystemState","Autopilot started");
     }
@@ -212,6 +218,11 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         stopService(WifiIntent);
         stopService(GPSIntent);
 
+        byte[] turnOff = {0x01, 0x00};
+        if(serialconnection.USBDeviceOK()) {
+            serialconnection.tx_data(turnOff);
+        }
+
         threadInterrupt = true;
         serialconnection.finalize();
 
@@ -224,6 +235,7 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
             Bundle b = intent.getExtras();
             vehicleState = b.getDoubleArray("stateVector");
             Log.i("Attitude","Roll "+vehicleState[0]+" Pitch "+vehicleState[1]+" Yaw "+vehicleState[2]+" p "+vehicleState[3]+" q "+vehicleState[4]+" r "+vehicleState[5]);
+            speedView.setText("Speed "+vehicleState[9]);
         }
     };
 
@@ -249,6 +261,7 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
     int AttitudeCommandWifi = 114;
     int pitchTemp;
     int rollTemp;
+    volatile boolean manualOverwrite = false;
     private BroadcastReceiver wifiReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -262,6 +275,7 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
             Bundle b = intent.getExtras();
             wifiData = b.getIntArray("commands");
             if(wifiData[0] == ThrottleCommandWifi){
+                manualOverwrite = true;
                 throttleData[0] = 0x01;
                 throttleData[1] = (byte) ((wifiData[1]) & 0xFF);
                 if(serialconnection.USBDeviceOK()) serialconnection.tx_data(throttleData);
@@ -295,6 +309,48 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         return ( (setpoint-deadZone < u) ? ( (u < setpoint+deadZone) ? setpoint : u) : u);
     }
 
+    private Runnable throttleControl = new Runnable() {
+        byte[] speedData = {0x01, 0};
+        int iterations = 0;
+        volatile boolean ESCInit = true;
+        @Override
+        public void run() {
+            while(!threadInterrupt){
+                //Initialize ESC
+                while(ESCInit){
+                    speedData[1] = 0x0A;
+                    if(iterations > 10){
+                        ESCInit = false;
+                    }
+                    if(serialconnection.USBDeviceOK()) {
+                        serialconnection.tx_data(speedData);
+                    }
+                    try {
+                        Thread.sleep(500);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                    iterations++;
+                }
+
+                if(!manualOverwrite) {
+                    speedData[1] = (byte) ((int) speedController.control(SpeedSetpoint, vehicleState[9], 0.2));
+                    if(serialconnection.USBDeviceOK()) {
+                        serialconnection.tx_data(speedData);
+                    }
+                }
+
+                Log.i("SpeedController", "Measured speed "+vehicleState[9]+" control output "+speedData[1]);
+                //Loop the thread - roughly 5Hz
+                try {
+                    Thread.sleep(200);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    };
+
     double[] AE = new double[2];
     double[] LR = new double[2];
     double[][] Mixing = new double[2][2];
@@ -323,6 +379,7 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
                 csData[1] = (byte) ((int)(LR[0]) & 0xFF);
                 csData[2] = 0x03;
                 csData[3] = (byte) ((int)(LR[1]) & 0xFF);
+
                 if(serialconnection.USBDeviceOK()) {
                     serialconnection.tx_data(csData);
                 }
