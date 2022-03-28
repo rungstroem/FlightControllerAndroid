@@ -109,6 +109,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 curLon = location.getLongitude();
                 curAlt = location.getAltitude();
             }
+            @Override
+            public void onStatusChanged(String provider, int status, Bundle extras){
+                //Do nothing for now -- May be called on older android versions but not on version Q and above
+            }
         });
         Location location = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
         curLat = location.getLatitude();

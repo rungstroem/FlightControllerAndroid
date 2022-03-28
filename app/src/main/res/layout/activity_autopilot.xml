@@ -274,11 +274,6 @@
             android:layout_marginLeft="20dp"
             android:text="Enter"/>
     </LinearLayout>
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:id="@+id/SpeedTextview"
-        android:text="Speed" />
 
 </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

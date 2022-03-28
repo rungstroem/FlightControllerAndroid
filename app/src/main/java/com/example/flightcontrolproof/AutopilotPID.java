@@ -46,7 +46,6 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
     Button throttleOKButtonInput;
     Button pDampOKButtonInput;
     Button qDampOKButtonInput;
-    TextView speedView;
 
     private double pitchKp = 1.5;
     private double pitchKi = 0.1;
@@ -64,12 +63,10 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
     private double pRateKi = 0.05;
     private double pRateKd = 0;
 
-    private double heightKp = 2.0;
-    private double heightKi = 0.0;  //Because barometer is unstable I think P controller is best.
-    private double heightKd = 0.0;
+    private double[] heightGains = {2.0, 0, 0}; //Because barometer is unstable I think P controller is best.
 
     private double throttleKp = 5;
-    private double throttleKi = 0.05;
+    private double throttleKi = 0.5;
     private double throttleKd = 0.0;
 
     private double rad2deg = 180/Math.PI;
@@ -87,20 +84,18 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
 
     Thread controllerThread;
     Thread speedThread;
-    Thread guidanceThread;
     LinearAlgebra LA;
 
     //PID controllers
+    PIDController speedController;
     PIDController pitchController;
     PIDController qRateController;
-    PIDController heightController;
-    PIDController speedController;
     PIDController rollController;
     PIDController pRateController;
 
     double RollSetpoint = 0;
     double PitchSetpoint = 0;
-    int SpeedSetpoint = 25; //20 m/s
+    int SpeedSetpoint = 10; //10 m/s
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -149,8 +144,6 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         qDampOKButtonInput = findViewById(R.id.qDampOKButton);
         qDampOKButtonInput.setOnClickListener(this);
 
-        speedView = findViewById(R.id.SpeedTextview);
-
         //Initialize serial connection
         serialconnection = new Serialconnection(9600, 8, this);
 
@@ -188,8 +181,6 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         pitchController.setSaturation(45,-35);
         qRateController = new PIDController(qRateKp,qRateKi,qRateKd);
         qRateController.setSaturation(45,-35);
-        heightController = new PIDController(heightKp,heightKi,heightKd);
-        heightController.setSaturation(45,-45); //This is angle output so set saturation to maximum pitch angle
         speedController = new PIDController(throttleKp,throttleKi,throttleKd);
         speedController.setSaturation(100,15);   //Just to make sure that we don't send a NULL character to the µC
         rollController = new PIDController(rollKp,rollKi, rollKd);
@@ -202,8 +193,6 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
         controllerThread.start();
         speedThread = new Thread(throttleControl);
         speedThread.start();
-        //guidanceThread = new Thread(guidanceLOS);
-        //guidanceThread.start();
 
         Log.i("SystemState","Autopilot started");
     }
@@ -235,7 +224,6 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
             Bundle b = intent.getExtras();
             vehicleState = b.getDoubleArray("stateVector");
             Log.i("Attitude","Roll "+vehicleState[0]+" Pitch "+vehicleState[1]+" Yaw "+vehicleState[2]+" p "+vehicleState[3]+" q "+vehicleState[4]+" r "+vehicleState[5]);
-            speedView.setText("Speed "+vehicleState[9]);
         }
     };
 
@@ -254,6 +242,12 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
             RollSetpoint = b.getDouble("data");
         }
     };
+
+    public void sendDataToActivity(double[] data, String intentIdentifier){
+        Intent intent = new Intent(intentIdentifier);
+        intent.putExtra("data", data);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+    }
 
     byte[] throttleData = new byte[2];
     int[] wifiData = new int[10];
@@ -442,14 +436,14 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
                 break;
 
             case R.id.HeightOKButton:
-                if( !TextUtils.isEmpty( heightKpInput.getText().toString() ) ) heightKp = Double.parseDouble(heightKpInput.getText().toString());
-                if( !TextUtils.isEmpty( heightKiInput.getText().toString() ) ) heightKi = Double.parseDouble(heightKiInput.getText().toString());
-                if( !TextUtils.isEmpty( heightKdInput.getText().toString() ) ) heightKd = Double.parseDouble(heightKdInput.getText().toString());
-                Toast.makeText(getApplicationContext(),"Kp "+heightKp+" Ki "+heightKi+" Kd "+heightKd, Toast.LENGTH_LONG).show();
+                if( !TextUtils.isEmpty( heightKpInput.getText().toString() ) ) heightGains[0] = Double.parseDouble(heightKpInput.getText().toString());
+                if( !TextUtils.isEmpty( heightKiInput.getText().toString() ) ) heightGains[1] = Double.parseDouble(heightKiInput.getText().toString());
+                if( !TextUtils.isEmpty( heightKdInput.getText().toString() ) ) heightGains[2] = Double.parseDouble(heightKdInput.getText().toString());
+                Toast.makeText(getApplicationContext(),"Kp "+heightGains[0]+" Ki "+heightGains[1]+" Kd "+heightGains[2], Toast.LENGTH_LONG).show();
                 heightKpInput.setText("");
                 heightKiInput.setText("");
                 heightKdInput.setText("");
-                heightController.setGains(heightKp,heightKi,heightKd);
+                sendDataToActivity(heightGains, "AltitudeGuidanceGainUpdate");
                 break;
 
             case R.id.ThrottleOKButton:

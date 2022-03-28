@@ -14,13 +14,24 @@ import android.location.LocationRequest;
 import android.os.Bundle;
 import android.os.HandlerThread;
 import android.os.Looper;
+import android.util.Log;
 import android.widget.TextView;
 
 public class GPSActivity extends AppCompatActivity {
-    TextView mTextview;
+    TextView GPSview;
+    TextView oldGPSView;
+    TextView UTMView;
+    TextView oldUTMView;
     LocationManager mLocationManager;
     HandlerThread GPSUpdateThread;
     Looper GPSLooper;
+
+    double[] GPSLocation = new double[2];
+    double[] oldGPSLocation = new double[2];
+    double[] UTM;
+    double[] oldUTM = new double[2];
+
+    UTMConverterClass UTMConv;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -29,7 +40,13 @@ public class GPSActivity extends AppCompatActivity {
         GPSUpdateThread = new HandlerThread("GPS handler thread");
         GPSUpdateThread.start();
         GPSLooper = GPSUpdateThread.getLooper();
-        mTextview = findViewById(R.id.GPSTextView);
+
+        GPSview = findViewById(R.id.GPSTextView);
+        oldGPSView = findViewById(R.id.OldGPSTextView);
+        UTMView = findViewById(R.id.UTMTextView);
+        oldUTMView = findViewById(R.id.oldUTMTextView);
+
+        UTMConv = new UTMConverterClass();
         mLocationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
     }
 
@@ -52,12 +69,28 @@ public class GPSActivity extends AppCompatActivity {
     LocationListener GPSListener = new LocationListener() {
         @Override
         public void onLocationChanged(@NonNull Location location) {
+            GPSLocation[0] = location.getLatitude(); GPSLocation[1] = location.getLongitude();
+            UTM = UTMConv.getUTM(GPSLocation[0],GPSLocation[1]);
+            Log.i("GPS","GPS "+GPSLocation[0]+" "+GPSLocation[1]);
+            Log.i("GPS","GPS "+oldGPSLocation[0]+" "+oldGPSLocation[1]);
+            Log.i("GPS","UTM "+UTM[0]+" "+UTM[1]);
+            Log.i("GPS","UTM "+oldUTM[0]+" "+oldUTM[1]);
+            Log.i("GPSAccuracy","Accuracy "+location.getAccuracy());
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    mTextview.setText("Lat "+location.getLatitude()+" Lon "+location.getLongitude()+" Alt "+location.getAltitude());
+                    GPSview.setText(GPSLocation[0]+" "+GPSLocation[1]);
+                    oldGPSView.setText(oldGPSLocation[0]+" "+oldGPSLocation[1]);
+                    UTMView.setText(UTM[0]+" "+UTM[1]);
+                    oldUTMView.setText(oldUTM[0]+" "+oldUTM[1]);
                 }
             });
+            oldGPSLocation = GPSLocation;
+            oldUTM = UTM;
+        }
+        @Override
+        public void onStatusChanged(String provider, int status, Bundle extras){
+            //Do nothing for now -- May be called on older android versions but not on version Q and above
         }
     };
 }

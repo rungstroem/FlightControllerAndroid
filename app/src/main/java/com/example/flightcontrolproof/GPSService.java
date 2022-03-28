@@ -85,6 +85,8 @@ public class GPSService extends Service {
             UTMPosition[3] = Math.sqrt(pow(UTMTemp[0]-lastPos[0],2) + pow(UTMTemp[1]-lastPos[1],2))/((T1-T2)/1000);
         }
         lastPos[0] = UTMTemp[0]; lastPos[1] = UTMTemp[1]; T2 = T1;
+
+        Log.i("GPSService","Lat "+location.getLatitude()+" Lon "+location.getLongitude()+" Alt "+location.getAltitude()+" Accuracy "+location.getAccuracy()+" Eastings "+UTMTemp[0]+" Northings "+UTMTemp[1]);
         Intent intent = new Intent("GPSLocationUpdate");
         intent.putExtra("UTMCoordinates", UTMPosition);
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
@@ -93,7 +95,7 @@ public class GPSService extends Service {
     public final LocationListener GPSListener = new LocationListener() {
         @Override
         public void onLocationChanged(@NonNull Location location) {
-            Log.i("GPSUpdateService","Lat "+location.getLatitude()+" Lon "+location.getLongitude()+" Alt "+location.getAltitude());
+            //Log.i("GPSUpdateService","Lat "+location.getLatitude()+" Lon "+location.getLongitude()+" Alt "+location.getAltitude()+" Accuracy "+location.getAccuracy()+" ");
             //sendDataToActivity(location);
             sendUTMtoActivity(location);
         }

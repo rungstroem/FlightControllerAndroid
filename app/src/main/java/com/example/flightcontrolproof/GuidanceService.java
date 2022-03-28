@@ -13,23 +13,23 @@ import android.util.Log;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 public class GuidanceService extends Service {
-    Thread guidanceThread;
-    Thread altitudeThread;
-    volatile boolean threadInterrupt = false;
-
-    //Altitude PID controller
-    double[] altitudeGuidanceGains = new double[3];
-    PIDController altitudeGuidanceController;
-
     //Usefull variables
     double rad2deg = 180.0/Math.PI;
-    double rAcceptance = 5; //5m radius of acceptance
+    volatile boolean threadInterrupt = false;
 
-    double[][] waypointList;
-    double[] vehicleState = new double[10];  //[Roll Pitch Yaw p q r Px Py Pz Vt]
+    //Altitude guidance
+    Thread altitudeThread;
+    PIDController altitudeGuidanceController;
+    double[] altitudeGuidanceGains = {2.0, 0, 0};
     double altitudeSP = 3; //Just a fixed 3m altitude
 
+    //Heading guidance
+    Thread guidanceThread;
+    double[][] waypointList;
+    double rAcceptance = 50; //5m radius of acceptance
 
+    //Vehicle state from estimator service
+    double[] vehicleState = new double[10];  //[Roll Pitch Yaw p q r Px Py Pz Vt]
 
     public GuidanceService() {
     }
@@ -48,22 +48,16 @@ public class GuidanceService extends Service {
         //Register receiver for altitude controller gain update
         LocalBroadcastManager.getInstance(this).registerReceiver(altitudeGuidanceGainUpdate, new IntentFilter("AltitudeGuidanceGainUpdate"));
 
-        //Test waypoint list
-        //waypointList = new double[2][2];
-        //waypointList[0][0] = 6136684.033056987; waypointList[0][1] = 590956.734764795;
-        //waypointList[1][0] = 6136745.680555265; waypointList[1][1] = 590924.7906990591;
-
         //Shared preference - waypoints
         SharedPreferences mSharedPref = getSharedPreferences("WaypointList", Context.MODE_PRIVATE);
         waypointList = getPreference(mSharedPref);
 
         //Altitude controller
-        altitudeGuidanceGains = new double[3];
-        altitudeGuidanceGains[0] = 2.0;  altitudeGuidanceGains[1] = 0.0;  altitudeGuidanceGains[2] = 0.0;
-        altitudeGuidanceController = new PIDController(altitudeGuidanceGains[0], altitudeGuidanceGains[1],altitudeGuidanceGains[2]);
+        altitudeGuidanceController = new PIDController(altitudeGuidanceGains[0], altitudeGuidanceGains[1], altitudeGuidanceGains[2]);
+        altitudeGuidanceController.setSaturation(45,-45);   //This is angle output so set saturation to maximum pitch angle
 
         //Guidance threads
-        guidanceThread = new Thread(guidancePurePursuit);
+        guidanceThread = new Thread(guidanceCC);
         guidanceThread.start();
         altitudeThread = new Thread(guidanceAltitude);
         altitudeThread.start();
@@ -113,8 +107,8 @@ public class GuidanceService extends Service {
         @Override
         public void onReceive(Context context, Intent intent) {
             Bundle b = intent.getExtras();
-            altitudeGuidanceGains = b.getDoubleArray("gainVector");
-            altitudeGuidanceController.setGains(altitudeGuidanceGains[0],altitudeGuidanceGains[1],altitudeGuidanceGains[2]);
+            altitudeGuidanceGains = b.getDoubleArray("data");
+            altitudeGuidanceController.setGains(altitudeGuidanceGains[0], altitudeGuidanceGains[1], altitudeGuidanceGains[2]);
         }
     };
 
@@ -123,6 +117,28 @@ public class GuidanceService extends Service {
         intent.putExtra("data", data);
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
     }
+
+    private Runnable guidanceAltitude = new Runnable() {
+        double pitchCommand;
+        @Override
+        public void run() {
+            Log.i("SystemState", "Altitude guidance thread started");
+            while(!threadInterrupt){
+                pitchCommand = -altitudeGuidanceController.control(altitudeSP,steadyZone(altitudeSP,vehicleState[8],1),0.2);
+
+                Log.i("Guidance","Altitude "+vehicleState[8]+" setpoint "+pitchCommand+" Pitch "+vehicleState[1]);
+                sendDataToActivity(pitchCommand, "AltitudeGuidanceUpdate");
+
+                //Loop the thread - 5Hz
+                try {
+                    Thread.sleep(200);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+            Log.i("SystemState","Altitude guidance thread shutting down");
+        }
+    };
 
     private Runnable guidanceCC = new Runnable() {
         double UAVx, UAVy, UAVyaw;
@@ -159,7 +175,7 @@ public class GuidanceService extends Service {
                 crossTrackErrorAngle = Math.asin(distance*Math.sin(LOSangle-UAVangle)/pLOS)*rad2deg;
                 heading = crossTrackErrorAngle+LOSangle;
                 missDistance = Math.sqrt(Math.pow(waypointList[waypointPointer+1][0]-UAVx,2)+Math.pow(waypointList[waypointPointer+1][1]-UAVy,2));
-                RollCommand = k*(heading-UAVyaw);  //Can also include air speed Va - setPoint=k*(heading-UAVyaw)*Va
+                RollCommand = -k*(heading-UAVyaw);  //Can also include air speed Va - setPoint=k*(heading-UAVyaw)*Va
 
                 //Change to next waypoint
                 if(missDistance < rAcceptance){
@@ -167,7 +183,8 @@ public class GuidanceService extends Service {
                     if(waypointList.length -1 < waypointPointer) waypointPointer = waypointList.length-1;
                 }
 
-                Log.i("Guidance","LOS angle "+LOSangle+" UAV angle "+UAVangle+" Roll setpoint "+RollCommand+" Yaw "+UAVyaw+" missDistance "+missDistance+" waypoint "+waypointList[waypointPointer+1][0]+" "+waypointList[waypointPointer+1][1]);
+                sendDataToActivity(RollCommand, "GuidanceUpdate");
+                Log.i("Guidance","LOS angle "+LOSangle+" Roll setpoint "+RollCommand+" Yaw "+UAVyaw+" missDistance "+missDistance+" waypoint "+waypointList[waypointPointer+1][0]+" "+waypointList[waypointPointer+1][1]+" WaypointNR "+waypointPointer+" CurrentLocation "+UAVx+" "+UAVy);
 
                 //Loop the thread - 5Hz
                 try {
@@ -263,7 +280,7 @@ public class GuidanceService extends Service {
                     }
                 }
 
-                Log.i("Guidance","LOS angle "+LOSangle+" Roll setpoint "+RollCommand+" Yaw "+UAVyaw+" missDistance "+missDistance+" waypoint "+waypointList[waypointPointer+1][0]+" "+waypointList[waypointPointer+1][1]);
+                Log.i("Guidance","LOS angle "+LOSangle+" Roll setpoint "+RollCommand+" Yaw "+UAVyaw+" missDistance "+missDistance+" waypoint "+waypointList[waypointPointer+1][0]+" "+waypointList[waypointPointer+1][1]+" WaypointNR "+waypointPointer+" CurrentLocation "+UAVx+" "+UAVy);
                 //Loop the thread - 5Hz
                 try {
                     Thread.sleep(200);
@@ -275,26 +292,6 @@ public class GuidanceService extends Service {
         }
     };
 
-    private Runnable guidanceAltitude = new Runnable() {
-        @Override
-        public void run() {
-            double pitchCommand;
 
-            Log.i("SystemState", "Altitude guidance thread started");
-            while(!threadInterrupt){
-                pitchCommand = -altitudeGuidanceController.control(altitudeSP,steadyZone(altitudeSP,vehicleState[8],1),0.2);
-
-                Log.i("Guidance","Altitude "+vehicleState[8]+" setpoint "+pitchCommand);
-                sendDataToActivity(pitchCommand, "AltitudeGuidanceUpdate");
-                //Loop the thread - 5Hz
-                try {
-                    Thread.sleep(200);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-            Log.i("SystemState","Altitude guidance thread shutting down");
-        }
-    };
 
 }
