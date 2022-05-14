@@ -188,6 +188,16 @@ public class GameControl extends AppCompatActivity {
                         mutex.unlock();
                     }
                 }
+                case MotionEvent.ACTION_UP:{    //Reset to 0 throttle when release
+                    xR = 1;
+                    try {
+                        mutex.lock();
+                        dataBuffer = "t"+(char)((xR)&0xFF)+"x";
+                        newData = true;
+                    }finally {
+                        mutex.unlock();
+                    }
+                }
             }
             return false;
         }
@@ -207,6 +217,18 @@ public class GameControl extends AppCompatActivity {
                     if(yL > 100) yL = 100;
                     if(yL < 1) yL = 1;  //Set to 1 because I don't know if you can send 0 (or NULL) via TCP/IP
                     Log.i("GameController","Left "+xL+" "+yL);
+                    try {
+                        mutex.lock();
+                        dataBuffer = "r"+(char)((yL)&0xFF)+(char)((xL)&0xFF)+"x";
+                        Log.i("dataBuffer","Data"+dataBuffer);
+                        newData = true;
+                    }finally {
+                        mutex.unlock();
+                    }
+                }
+                case MotionEvent.ACTION_UP:{    //Reset to wing-level when release
+                    xL = 50;
+                    yL = 50;
                     try {
                         mutex.lock();
                         dataBuffer = "r"+(char)((yL)&0xFF)+(char)((xL)&0xFF)+"x";

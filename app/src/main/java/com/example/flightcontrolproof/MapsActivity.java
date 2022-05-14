@@ -159,7 +159,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
                 double[] UTMTemp = new double[2];
                 // !!! You ended here kenneth !!!
-                for(int i=1; i<waypoints.size();i++){   //i=1 to ignore initLatLon at i=0
+                for(int i=0; i<waypoints.size();i++){   //i=1 to ignore initLatLon at i=0
                     UTMTemp = UTMConv.getUTM(waypoints.get(i).latitude,waypoints.get(i).longitude);
                     editor.putLong("UTMLatitude"+i,Double.doubleToRawLongBits(UTMTemp[0]));
                     editor.putLong("UTMLongitude"+i, Double.doubleToRawLongBits(UTMTemp[1]));

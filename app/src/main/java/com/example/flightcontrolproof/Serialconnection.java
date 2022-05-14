@@ -86,7 +86,11 @@ public class Serialconnection {
             byte[] data = null;
             @Override
             public void run() {
-                //dataOK = mConnection.bulkTransfer(mEndIN,data,1,TIMEOUT);   // wait until the serial setup is done
+                try {
+                    dataOK = mPort.read(data,TIMEOUT);   // wait until the serial setup is done
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
                 if(dataOK > 0){
                     Log.i("Serial", "Data received - "+data);
                 }else{

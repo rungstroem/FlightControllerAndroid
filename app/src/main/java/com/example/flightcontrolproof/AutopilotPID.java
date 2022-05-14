@@ -65,7 +65,7 @@ public class AutopilotPID extends AppCompatActivity implements View.OnClickListe
 
     private double[] heightGains = {2.0, 0, 0}; //Because barometer is unstable I think P controller is best.
 
-    private double throttleKp = 5;
+    private double throttleKp = 10;
     private double throttleKi = 0.5;
     private double throttleKd = 0.0;
 

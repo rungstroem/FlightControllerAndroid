@@ -28,13 +28,11 @@ public class LinearAlgebra {
     double[][] matrixMultiply(double[][] J, double[][] P) {
         int n = J.length;
         double[][] matReturn = new double[n][n];
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < n; j++) {
-                double temp = 0.0;
+        for (int i = 0; i < n; i++) {           //Rows [i][j]
+            for (int j = 0; j < n; j++) {       //Cols
                 for (int k = 0; k < n; k++) {
-                    temp = J[i][k] * P[k][i];
+                    matReturn[i][j] += J[i][k]*P[k][j];
                 }
-                matReturn[i][j] = temp;
             }
         }
         return matReturn;
