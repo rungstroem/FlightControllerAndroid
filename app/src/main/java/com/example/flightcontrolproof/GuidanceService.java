@@ -26,7 +26,7 @@ public class GuidanceService extends Service {
     //Heading guidance
     Thread guidanceThread;
     double[][] waypointList;
-    double rAcceptance = 25; //25m radius of acceptance
+    double rAcceptance = 5; //25m radius of acceptance
 
     //Vehicle state from estimator service
     double[] vehicleState = new double[10];  //[Roll Pitch Yaw p q r Px Py Pz Vt]
@@ -53,14 +53,18 @@ public class GuidanceService extends Service {
         //waypointList = getPreference(mSharedPref);
 
         waypointList = new double[4][4];
+        waypointList[0][0] = 6135826; waypointList[0][1] = 586756;     //WP 0
+        waypointList[1][0] = 6135880; waypointList[1][1] = 586718;     //WP 1
+        waypointList[2][0] = 6135820; waypointList[2][1] = 586634;     //WP 2
+        waypointList[3][0] = 6135770; waypointList[3][1] = 586673;     //WP 3
         //waypointList[0][0] = 6138290; waypointList[0][1] = 588521;     //WP 0
         //waypointList[1][0] = 6138357; waypointList[1][1] = 588524;     //WP 1
         //waypointList[2][0] = 6138363; waypointList[2][1] = 588425;     //WP 2
         //waypointList[3][0] = 6138282; waypointList[3][1] = 588447;     //WP 3
-        waypointList[0][0] = 6136667; waypointList[0][1] = 590895;     //WP 0
-        waypointList[1][0] = 6136696; waypointList[1][1] = 590911;     //WP 1
-        waypointList[2][0] = 6136676; waypointList[2][1] = 590944;     //WP 2
-        waypointList[3][0] = 6136618; waypointList[3][1] = 590817;     //WP 3
+        //waypointList[0][0] = 6136667; waypointList[0][1] = 590895;     //WP 0
+        //waypointList[1][0] = 6136696; waypointList[1][1] = 590911;     //WP 1
+        //waypointList[2][0] = 6136676; waypointList[2][1] = 590944;     //WP 2
+        //waypointList[3][0] = 6136618; waypointList[3][1] = 590817;     //WP 3
 
 
         //Altitude controller
@@ -68,8 +72,8 @@ public class GuidanceService extends Service {
         altitudeGuidanceController.setSaturation(45,-45);   //This is angle output so set saturation to maximum pitch angle
 
         //Guidance threads
-        guidanceThread = new Thread(guidanceLOS);
-        //guidanceThread.start();
+        guidanceThread = new Thread(guidanceCC);
+        guidanceThread.start();
         altitudeThread = new Thread(guidanceAltitude);
         altitudeThread.start();
     }
@@ -192,6 +196,18 @@ public class GuidanceService extends Service {
                 missDist = Math.sqrt(Math.pow(waypointList[WPPointer][1]-UAVy,2)+Math.pow(waypointList[WPPointer][0]-UAVx,2));
                 RollCommand = -k1*(dPhi-UAVyaw);
                 lastRollCommand = (RollCommand-lastRollCommand)/filterConst;
+                if(lastRollCommand > 30){
+                    lastRollCommand = 30;
+                }
+                if(lastRollCommand < -30){
+                    lastRollCommand = -30;
+                }
+                if(RollCommand > 30){
+                    RollCommand = 30;
+                }
+                if(RollCommand < -30){
+                    RollCommand = -30;
+                }
 
                 if(missDist < rAcceptance){
                     WPPointer++;
@@ -199,7 +215,7 @@ public class GuidanceService extends Service {
                 }
 
                 sendDataToActivity(lastRollCommand, "GuidanceUpdate");
-                Log.i("Guidance","LOS angle "+theta+" Roll setpoint "+RollCommand+" Yaw "+UAVyaw+" missDistance "+missDist+" waypoint "+waypointList[WPPointer][0]+" "+waypointList[WPPointer][1]+" WaypointNR "+WPPointer+" CurrentLocation "+UAVx+" "+UAVy);
+                Log.i("GuidanceCC"," T "+theta+" TU "+thetaU+" Ru "+Ru+" S1 "+S1+" ErrorAng "+errorAngle+" pPhi "+dPhi+" MissD "+missDist+" RCommand "+RollCommand+" Yaw "+UAVyaw+" waypoint "+waypointList[WPPointer][0]+" "+waypointList[WPPointer][1]+" WaypointNR "+WPPointer+" CurrentLocation "+UAVx+" "+UAVy);
 
                 //Loop the thread - 5Hz
                 try {
@@ -256,7 +272,8 @@ public class GuidanceService extends Service {
                 }
 
                 sendDataToActivity(RollCommand, "GuidanceUpdate");
-                Log.i("Guidance","LOS angle "+LOSangle+" Roll setpoint "+RollCommand+" Yaw "+UAVyaw+" missDistance "+missDistance+" waypoint "+waypointList[waypointPointer+1][0]+" "+waypointList[waypointPointer+1][1]+" WaypointNR "+waypointPointer+" CurrentLocation "+UAVx+" "+UAVy);
+                //Log.i("Guidance","LOS angle "+LOSangle+" Roll setpoint "+RollCommand+" Yaw "+UAVyaw+" missDistance "+missDistance+" waypoint "+waypointList[waypointPointer+1][0]+" "+waypointList[waypointPointer+1][1]+" WaypointNR "+waypointPointer+" CurrentLocation "+UAVx+" "+UAVy);
+                Log.i("GuidanceCC"," T "+LOSangle+" TU "+UAVangle+" Ru "+distance+" S1 "+pLOS+" ErrorAng "+crossTrackErrorAngle+" "+heading+" MissD "+missDistance+" RCommand "+RollCommand+" Yaw "+UAVyaw+" waypoint "+waypointList[waypointPointer][0]+" "+waypointList[waypointPointer][1]+" WaypointNR "+waypointPointer+" CurrentLocation "+UAVx+" "+UAVy);
 
                 //Loop the thread - 5Hz
                 try {

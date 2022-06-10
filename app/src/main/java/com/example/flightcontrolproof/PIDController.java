@@ -76,7 +76,7 @@ public class PIDController {
         if(Ki != 0.0){  //Anti-windup
             integrator = integrator + Ts/Ki * (u-uUnsaturated);
         }
-
+        //Billinear (Trapezoidal) implementation!
         lastU += (u-lastU) / filterConstant;
         lastU = steadyZone(lastU);
         return lastU;

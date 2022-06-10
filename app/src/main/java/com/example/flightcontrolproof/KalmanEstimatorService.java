@@ -92,8 +92,9 @@ public class KalmanEstimatorService extends Service {
 
         //Sensor create
         mSensorManager = (SensorManager) this.getSystemService(Context.SENSOR_SERVICE);
-        accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);           //accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER); - accelerometer values with gravity
-        gravity = mSensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY);
+        //accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);           //accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER); - accelerometer values with gravity
+        //gravity = mSensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY);
+        accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER); //- accelerometer values with gravity
         gyroscope = mSensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
         magnetometer = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
         pressure = mSensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE);
@@ -118,6 +119,7 @@ public class KalmanEstimatorService extends Service {
 
         //Sensor listeners
         mSensorManager.registerListener(accListener, accelerometer, 5000, sensorThreadHandler);     //5000µS is 200Hz
+        mSensorManager.registerListener(AccGraListener, accelerometer, 5000, sensorThreadHandler);     //5000µS is 200Hz
         mSensorManager.registerListener(gravityListener, gravity, 5000, sensorThreadHandler);
         mSensorManager.registerListener(gyroListener, gyroscope, 5000, sensorThreadHandler);
         mSensorManager.registerListener(presListener, pressure, 5000, sensorThreadHandler);
@@ -127,7 +129,7 @@ public class KalmanEstimatorService extends Service {
 
         //Filter threads start
         complementaryThread.start();
-        //kalmanThread.start();     //This is started from the GPS broadcast receiver so the kalman filter only starts when GPS is available
+        kalmanThread.start();     //This is started from the GPS broadcast receiver so the kalman filter only starts when GPS is available
 
         Log.i("SystemState","Kalman service started");
 
@@ -214,11 +216,11 @@ public class KalmanEstimatorService extends Service {
                 gyroAngles = LA.vectConstMultiply(LA.vectMatMultiply(TMat_BN, gyroRates), dt);
 
                 gyroAngles[1] = -gyroAngles[1];
-
+    /*
                 //For test
                 //gyroAngleSum[0] += gyroAngles[0];
-                //gyroAngleSum[1] += -gyroAngles[1];
-                //gyroAngleSum[2] += -gyroAngles[2];
+                //gyroAngleSum[1] += gyroAngles[1];
+                //gyroAngleSum[2] += gyroAngles[2];
                 //
                 //compAngles[0] = (1-K)*(compAngles[0] + gyroAngles[0]) +K*accAngles[0];
                 //compAngles[1] = (1-K)*(compAngles[1] + gyroAngles[1]) +K*accAngles[1];
@@ -231,36 +233,36 @@ public class KalmanEstimatorService extends Service {
                 //gyroAngleSum[0] += -gyroAngles[0];
                 //gyroAngleSum[1] += gyroAngles[1];
                 //gyroAngleSum[2] += gyroAngles[2];
-                gyroAngleSum[0] += gyroRates[0]*dt;
-                gyroAngleSum[1] += gyroRates[1]*dt;
-                gyroAngleSum[2] += gyroRates[2]*dt;
+                //gyroAngleSum[0] += gyroRates[0]*dt;
+                //gyroAngleSum[1] += gyroRates[1]*dt;
+                //gyroAngleSum[2] += gyroRates[2]*dt;
                 //
-                compAngles[0] = (1-K)*(compAngles[0] + gyroRates[0]*dt) +K*accAngles[0];
-                compAngles[1] = (1-K)*(compAngles[1] + gyroRates[1]*dt) +K*accAngles[1];
-                compAngles[2] = (1-K)*(compAngles[2] + gyroRates[2]*dt) +K*accAngles[2];
+                //compAngles[0] = (1-K)*(compAngles[0] + gyroRates[0]*dt) +K*accAngles[0];
+                //compAngles[1] = (1-K)*(compAngles[1] + gyroRates[1]*dt) +K*accAngles[1];
+                //compAngles[2] = (1-K)*(compAngles[2] + gyroRates[2]*dt) +K*accAngles[2];
 
                 //Log.i("ComplementaryFilter", "R " + compAngles[0] + " P " + compAngles[1] + " Y " + compAngles[2]+" accR "+accAngles[0]+" accP "+accAngles[1]+" accY "+accAngles[2]+
                 //        " gyroP "+lastGyro[0]+" gyroQ "+lastGyro[1]+" gyroR "+lastGyro[2] + " gyroR "+gyroAngleSum[0]+" gyroP "+gyroAngleSum[1]+" gyroY "+gyroAngleSum[2]);
 
                 Log.i("ComplementaryFilter", "R " + compAngles[0] + " P " + compAngles[1] + " Y " + compAngles[2]+" accR "+accAngles[0]+" accP "+accAngles[1]+" accY "+accAngles[2]+
                         " gyroP "+gyroAngles[0]+" gyroQ "+gyroAngles[1]+" gyroR "+gyroAngles[2]+ " gyroR "+gyroAngleSum[0]+" gyroP "+gyroAngleSum[1]+" gyroY "+gyroAngleSum[2]);
+    */
 
-
-                //estAngles[0] += gyroAngles[0];
-                //estAngles[1] += gyroAngles[1];
-                //estAngles[2] += gyroAngles[2];
+                estAngles[0] += gyroAngles[0];
+                estAngles[1] += gyroAngles[1];
+                estAngles[2] += gyroAngles[2];
 
                 //Actual filter algorithm
-                //estAngles[0] = (1 - K) * estAngles[0] + K * accAngles[0];
-                //estAngles[1] = (1 - K) * estAngles[1] + K * accAngles[1];
-                //estAngles[2] = (1 - K) * estAngles[2] + K * accAngles[2];
+                estAngles[0] = (1 - K) * estAngles[0] + K * accAngles[0];
+                estAngles[1] = (1 - K) * estAngles[1] + K * accAngles[1];
+                estAngles[2] = (1 - K) * estAngles[2] + K * accAngles[2];
 
-                //vehicleState[0] = estAngles[0]; vehicleState[1] = estAngles[1]; vehicleState[2] = estAngles[2];     //Euler angles for stability controllers
-                //vehicleState[3] = p;            vehicleState[4] = q;            vehicleState[5] = r;                //Gyro rates for damper controllers
+                vehicleState[0] = estAngles[0]; vehicleState[1] = estAngles[1]; vehicleState[2] = estAngles[2];     //Euler angles for stability controllers
+                vehicleState[3] = p;            vehicleState[4] = q;            vehicleState[5] = r;                //Gyro rates for damper controllers
 
                 //sendDataToActivity(vehicleState);
                 //Log.i("ComplementaryFilter", "R " + estAngles[0] + " P " + estAngles[1] + " Y " + estAngles[2]);
-                //Log.i("ComplementaryFilter", "R " + estAngles[0] + " P " + estAngles[1] + " Y " + estAngles[2]+" accR "+accAngles[0]+" accP "+accAngles[1]+" accY "+accAngles[2]+" gyroP "+p+" gyroQ "+q+" gyroR "+r + " gyroR "+gyroAngleSum[0]+" gyroP "+gyroAngleSum[1]+" gyroY "+gyroAngleSum[2]);
+                Log.i("ComplementaryFilter", "R " + estAngles[0] + " P " + estAngles[1] + " Y " + estAngles[2]+" accR "+accAngles[0]+" accP "+accAngles[1]+" accY "+accAngles[2]+" gyroP "+p+" gyroQ "+q+" gyroR "+r + " gyroR "+gyroAngleSum[0]+" gyroP "+gyroAngleSum[1]+" gyroY "+gyroAngleSum[2]);
 
 
                 //Loop thread every 5mS - 200Hz
@@ -521,6 +523,10 @@ public class KalmanEstimatorService extends Service {
     SensorEventListener accListener = new SensorEventListener() {
         @Override
         public void onSensorChanged(SensorEvent sensorEvent) {
+
+            Log.i("AccelerationTester", "z "+ (-sensorEvent.values[2]+9.82));
+
+
             acc[0] = sensorEvent.values[1];   //X-axis
             acc[1] = sensorEvent.values[0];   //Y-axis
             acc[2] = sensorEvent.values[2];   //Z-axis
@@ -553,16 +559,51 @@ public class KalmanEstimatorService extends Service {
         }
     };
 
+
+    double[] linear_acceleration = new double[3];
+    double[] grav = new double[3];
+    SensorEventListener AccGraListener = new SensorEventListener() {
+        @Override
+        public void onSensorChanged(SensorEvent sensorEvent) {
+            final double alpha = 0.8;
+
+            // Isolate the force of gravity with the low-pass filter.
+            grav[0] = alpha * grav[0] + (1 - alpha) * sensorEvent.values[1];
+            grav[1] = alpha * grav[1] + (1 - alpha) * sensorEvent.values[0];
+            grav[2] = alpha * grav[2] + (1 - alpha) * -sensorEvent.values[2];
+
+            // Remove the gravity contribution with the high-pass filter.
+            linear_acceleration[0] = sensorEvent.values[1] - grav[0];
+            linear_acceleration[1] = sensorEvent.values[0] - grav[1];
+            linear_acceleration[2] = -sensorEvent.values[2] + grav[2];
+
+            accR = Math.atan2(grav[1], grav[2])*rad2deg;    // atan2(y,z)
+            accP = Math.atan2(grav[0], Math.sqrt(Math.pow(grav[1],2)+(Math.pow(grav[2],2))))*rad2deg;    // atan2(-x,sqrt(y²+z²))
+
+
+        }
+
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int i) {
+
+        }
+    };
+
     double[] lastRates = new double[3];
     double[] lastGyro = new double[3];
     double gyroFilterConst = 2;
     SensorEventListener gyroListener = new SensorEventListener() {
         @Override
         public void onSensorChanged(SensorEvent sensorEvent) {
-            p = -sensorEvent.values[1]*rad2deg;  //X-axis
-            q = -sensorEvent.values[0]*rad2deg;  //Y-axis
-            r = -sensorEvent.values[2]*rad2deg;  //Z-axis
+            //p = -sensorEvent.values[1]*rad2deg;  //X-axis
+            //q = -sensorEvent.values[0]*rad2deg;  //Y-axis
+            //r = -sensorEvent.values[2]*rad2deg;  //Z-axis
 
+            p = sensorEvent.values[0]*rad2deg;  //X-axis
+            q = sensorEvent.values[1]*rad2deg;  //Y-axis
+            r = sensorEvent.values[2]*rad2deg;  //Z-axis
+
+            Log.i("RotationAxis", "p "+p+" q "+q+" r "+r);
             lastRates[0] += (p-lastRates[0])/gyroFilterConst;
             lastRates[1] += (q-lastRates[1])/gyroFilterConst;
             lastRates[2] += (r-lastRates[2])/gyroFilterConst;
